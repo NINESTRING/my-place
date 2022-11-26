@@ -1,0 +1,28 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Place {
+  id                Int      @id @default(autoincrement())
+  userId            String   @map(name: "user_id")
+  image             String
+  imageCreationTime DateTime
+  latitude          Float
+  longitude         Float
+  description       String
+  rating            Int
+  category          Int
+  createdAt         DateTime @default(now()) @map(name: "created_at")
+  updatedAt         DateTime @default(now()) @map(name: "updated_at")
+
+  @@index([userId], name: "places.userId")
+  @@map(name: "places")
+}
