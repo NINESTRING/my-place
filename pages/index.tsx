@@ -1,6 +1,6 @@
 import { useQuery } from "@apollo/client";
 import Image from "next/image";
-import { ALL_PLACES_QUERY, PLACES_QUERY } from "src/schema/schema";
+import { ALL_PLACES_QUERY } from "src/schema/schema";
 import styled from "styled-components";
 
 const Home = () => {

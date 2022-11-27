@@ -95,7 +95,7 @@ const Map = () => {
               <div>
                 <h3>{selectedPlace.description}</h3>
                 <Image
-                  src={"/v1668691037/vfhjbnn7kpbd1lqkjydb.jpg"}
+                  src={selectedPlace.publicId}
                   width={300}
                   height={300}
                   objectFit="cover"

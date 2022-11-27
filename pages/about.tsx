@@ -1,9 +1,10 @@
 import { useMutation } from "@apollo/client";
 import exifr from "exifr";
+import lottie from "lottie-web";
 import "mapbox-gl/dist/mapbox-gl.css";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { ChangeEvent, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import ReactMapGL, { MapRef, Marker } from "react-map-gl";
 import { useAuth } from "src/auth/useAuth";
@@ -13,6 +14,7 @@ import {
   UPDATE_PLACE_MUTATION,
 } from "src/schema/schema";
 import styled from "styled-components";
+import photoUpload from "../src/assets/photoUpload.json";
 
 interface IUploadImageResponse {
   secure_url: string;
@@ -40,7 +42,7 @@ async function uploadImage(
 
 interface IFormData {
   description: string;
-  image: FileList;
+  image: File;
   rating: number;
   category: number;
 }
@@ -75,6 +77,8 @@ const About = () => {
       const file = event.target.files[0];
       const reader = new FileReader();
 
+      setValue("image", file);
+
       reader.onloadend = () => {
         exifr.parse(reader.result as string).then((data) => {
           if (data?.latitude && data?.longitude) {
@@ -100,30 +104,29 @@ const About = () => {
     }
   };
 
-  const onSubmit = async (data: IFormData) => {
-    let image =
-      "https://res.cloudinary.com/dxuntw2ej/image/upload/v1668691037/vfhjbnn7kpbd1lqkjydb.jpg";
+  const onSubmit = async (formData: IFormData) => {
+    let image = "";
 
     const { data: signatureData } = await createSignature();
 
     if (signatureData) {
       const { signature, timestamp } = signatureData.createImageSignature;
-      const imageData = await uploadImage(data.image[0], signature, timestamp);
+      const imageData = await uploadImage(formData.image, signature, timestamp);
       image = imageData.secure_url;
     }
 
     const { data: placeData } = await createPlace({
       variables: {
         input: {
-          description: data.description,
+          description: formData.description,
           image,
           imageCreationTime: exifrData.createDate,
           coordinates: {
             latitude: exifrData.lat,
             longitude: exifrData.lng,
           },
-          rating: Number(data.rating),
-          category: Number(data.category),
+          rating: Number(formData.rating),
+          category: Number(formData.category),
         },
       },
     });
@@ -133,26 +136,46 @@ const About = () => {
     }
   };
 
+  const lottieRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (lottieRef.current) {
+      lottie.loadAnimation({
+        container: lottieRef.current,
+        renderer: "svg",
+        loop: false,
+        autoplay: true,
+        animationData: photoUpload,
+      });
+    }
+  }, []);
+
   return (
     <Main>
       <h1>This is the "About" page</h1>
       <Form onSubmit={handleSubmit(onSubmit)}>
+        {/* <input type="file" {...(register("image"), { required: true })} /> */}
         <ContentWrapper>
-          <StyledImage
-            src={previewImage ?? "/v1668691037/vfhjbnn7kpbd1lqkjydb.jpg"}
-            layout="fill"
-            objectFit="cover"
-            onClick={() => imageInputRef.current?.click()}
-          />
-          <ImageInput
-            id="image"
-            name="image"
-            type="file"
-            accept="image/*"
-            {...(register("image"), { required: true })}
-            onChange={onImageUpload}
-            ref={imageInputRef}
-          />
+          <label>
+            <Lottie ref={lottieRef} />
+            <ImageInput
+              // id="image"
+              type="file"
+              accept="image/*"
+              {...(register("image"), { required: true })}
+              onChange={onImageUpload}
+              ref={imageInputRef}
+            />
+          </label>
+
+          {previewImage && (
+            <StyledImage
+              src={previewImage}
+              layout="fill"
+              objectFit="cover"
+              onClick={() => imageInputRef.current?.click()}
+            />
+          )}
         </ContentWrapper>
         <ContentWrapper>
           <ReactMapGL
@@ -162,7 +185,7 @@ const About = () => {
               latitude: exifrData.lat,
               zoom: 10,
             }}
-            style={{ borderRadius: "50%" }}
+            style={{ borderRadius: "50%", overflow: "hidden" }}
             mapStyle="mapbox://styles/mapbox/streets-v9"
             mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_API_TOKEN}
           >
@@ -389,18 +412,30 @@ const ContentWrapper = styled.div`
   height: 300px;
   width: 300px;
   position: relative;
+  cursor: pointer;
 `;
 
 const StyledImage = styled(Image)`
   border-radius: 50%;
-  cursor: pointer;
 
   &:hover {
     opacity: 0.5;
   }
 `;
 
-const ImageInput = styled.input``;
+const ImageInput = styled.input`
+  opacity: 0;
+`;
+
+const Lottie = styled.div`
+  /* width: 100%; */
+  /* height: 100%; */
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-color: white;
+  cursor: pointer;
+`;
 
 const RadioWapper = styled.div`
   display: flex;
