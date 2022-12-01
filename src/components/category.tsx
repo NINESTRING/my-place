@@ -103,4 +103,9 @@ const MainComponent = styled.div`
   .star {
     fill: gold;
   }
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
 `;
