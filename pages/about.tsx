@@ -9,6 +9,7 @@ import { Controller, useForm } from "react-hook-form";
 import ReactMapGL, { MapRef, Marker } from "react-map-gl";
 import { useAuth } from "src/auth/useAuth";
 import Category from "src/components/category";
+import Spinner from "src/components/spiner";
 import StarRating from "src/components/starRating";
 import {
   CREATE_PLACE_MUTATION,
@@ -64,7 +65,7 @@ const About = () => {
   const [previewImage, setPreviewImage] = useState<string>();
   const [createSignature] = useMutation(SIGNATURE_MUTATION);
   const [updatePlace] = useMutation(UPDATE_PLACE_MUTATION);
-  const [createPlace] = useMutation(CREATE_PLACE_MUTATION);
+  const [createPlace, { loading }] = useMutation(CREATE_PLACE_MUTATION);
 
   const {
     register,
@@ -155,7 +156,6 @@ const About = () => {
 
   return (
     <Main>
-      <h1>This is the "About" page</h1>
       <Form onSubmit={handleSubmit(onSubmit)}>
         <ContentWrapper>
           <label>
@@ -205,7 +205,11 @@ const About = () => {
           control={control}
           name="category"
           defaultValue={4}
-          render={({ field: { onChange } }) => <Category onChange={onChange} />}
+          render={({ field: { onChange } }) => (
+            <IconContainer>
+              <Category onChange={onChange} />
+            </IconContainer>
+          )}
         />
 
         <TextInput
@@ -219,11 +223,13 @@ const About = () => {
           name="rating"
           defaultValue={3}
           render={({ field: { onChange } }) => (
-            <StarRating onChange={onChange} />
+            <IconContainer>
+              <StarRating onChange={onChange} />
+            </IconContainer>
           )}
         />
 
-        <Button type="submit">Submit</Button>
+        <Button type="submit">{loading ? <Spinner /> : "submit"}</Button>
       </Form>
     </Main>
   );
@@ -278,45 +284,39 @@ const Lottie = styled.div`
 `;
 
 const TextInput = styled.input`
+  width: 300px;
   height: 64px;
+  border: 0;
   padding-left: 25px;
   border-radius: 36px;
 `;
 
+const IconContainer = styled.div`
+  display: block;
+  width: 300px;
+  height: 100px;
+  align-self: center;
+  position: relative;
+`;
+
 const Button = styled.button`
   align-self: center;
-  width: 124px;
-  height: 44px;
+  width: 100px;
+  height: 100px;
+  border: 0;
+  position: relative;
 
-  /* Tekst */
-  font-size: 22px;
-  line-height: 44px;
+  line-height: 100px;
   text-align: center;
   text-decoration: none;
   color: white;
-  text-shadow: 0 -1px -1px #0f864a;
 
-  /* Wygląd */
   background-color: #12a65c;
-  border-radius: 4px;
-  /* box-shadow: 0 4px 0 #0f864a, 0 5px 5px 1px rgba(0, 0, 0, 0.4); */
-
-  /* Przejście */
-  -webkit-transition: all 0.15s ease-in-out;
-  -moz-transition: all 0.15s ease-in-out;
-  -o-transition: all 0.15s ease-in-out;
-  -ms-transition: all 0.15s ease-in-out;
-  transition: all 0.15s ease-in-out;
+  border-radius: 50px;
+  box-shadow: 0 8px 10px -4px rgba(0, 0, 0, 0.4);
 
   &:hover {
-    text-shadow: 0 -1px -1px #119d57;
     background-color: #14bd69;
-    /* box-shadow: 0 4px 0 #119d57, 0 5px 5px 1px rgba(0, 0, 0, 0.4); */
-  }
-
-  &:active {
-    /* margin-top: -18px; */
-    box-shadow: none;
   }
 `;
 

@@ -94,18 +94,16 @@ const Category: React.FC<{
 export default Category;
 
 const MainComponent = styled.div`
-  /* width: 100% */
   display: flex;
   justify-content: center;
   gap: 1rem;
-  /* background-color: blue; */
+  width: 100%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 
   .star {
     fill: gold;
-  }
-
-  svg {
-    width: 100%;
-    height: 100%;
   }
 `;

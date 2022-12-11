@@ -83,6 +83,10 @@ const GlobalStyle = createGlobalStyle`
     &:not(:disabled) { cursor: pointer; }
   }
 
+  svg {
+    width: 100%;
+    height: 100%;
+  }
 
 `;
 
