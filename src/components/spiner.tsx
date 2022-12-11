@@ -56,5 +56,7 @@ const Icon = styled.div`
 
   svg {
     animation: ${rotate} 2s linear infinite;
+    width: 100%;
+    height: 100%;
   }
 `;

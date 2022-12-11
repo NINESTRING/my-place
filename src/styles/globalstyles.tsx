@@ -82,12 +82,6 @@ const GlobalStyle = createGlobalStyle`
     &::-moz-focus-inner { border: 0; }
     &:not(:disabled) { cursor: pointer; }
   }
-
-  svg {
-    width: 100%;
-    height: 100%;
-  }
-
 `;
 
 export default GlobalStyle;
