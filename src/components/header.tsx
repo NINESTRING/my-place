@@ -9,8 +9,8 @@ const Header = () => {
       <Link href="/">
         <A isActive={route === "/"}>Home</A>
       </Link>
-      <Link href="/about">
-        <A isActive={route === "/about"}>About</A>
+      <Link href="/create">
+        <A isActive={route === "/about"}>Create</A>
       </Link>
       <Link href="/map">
         <A isActive={route === "/map"}>Map</A>

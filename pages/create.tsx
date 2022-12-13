@@ -63,6 +63,7 @@ const About = () => {
   });
   const router = useRouter();
   const [previewImage, setPreviewImage] = useState<string>();
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [createSignature] = useMutation(SIGNATURE_MUTATION);
   const [updatePlace] = useMutation(UPDATE_PLACE_MUTATION);
   const [createPlace, { loading }] = useMutation(CREATE_PLACE_MUTATION);
@@ -109,6 +110,9 @@ const About = () => {
   };
 
   const onSubmit = async (formData: IFormData) => {
+    if (isLoading) return;
+
+    setIsLoading(true);
     let image = "";
 
     const { data: signatureData } = await createSignature();
@@ -229,7 +233,7 @@ const About = () => {
           )}
         />
 
-        <Button type="submit">{loading ? <Spinner /> : "submit"}</Button>
+        <Button type="submit">{isLoading ? <Spinner /> : "submit"}</Button>
       </Form>
     </Main>
   );
@@ -259,6 +263,7 @@ const ContentWrapper = styled.div`
   margin: 0 auto 20px;
   height: 300px;
   width: 300px;
+  border-radius: 50%;
   position: relative;
   cursor: pointer;
 `;
