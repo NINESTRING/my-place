@@ -20,7 +20,7 @@ const Home = () => {
           <Card key={item.id}>
             <h2>{new Date(item.imageCreationTime).toDateString()}</h2>
             <p>{item.description}</p>
-            <BackgroundImage src={item.publicId} width="400px" height="200px" />
+            <BackgroundImage src={item.publicId} width="330px" height="180px" />
             <ul>
               <li></li>
               <li></li>
@@ -68,8 +68,9 @@ const Main = styled.main`
 `;
 
 const Card = styled.section`
-  width: 500px;
-  height: 200px;
+  max-width: 450px;
+  height: 180px;
+  width: 100vw;
   position: relative;
   overflow: hidden;
   background-color: #fff;
@@ -121,10 +122,8 @@ const Card = styled.section`
     position: absolute;
     top: 24px;
     left: 6px;
-    /* font-size: 60px; */
     font-weight: 700;
     color: #fff;
-    /* color: black; */
     z-index: 1;
     margin: 0;
     writing-mode: vertical-lr;
@@ -133,7 +132,7 @@ const Card = styled.section`
   p {
     position: absolute;
     top: 20px;
-    right: 40px;
+    right: 12px;
     color: #333;
     opacity: 0.7;
     font-size: 12px;
