@@ -118,7 +118,9 @@ src/
 
 ### 추가
 
-`zod`, `@hookform/resolvers`, `tailwindcss@4`, `@tailwindcss/postcss`, shadcn 관련(`radix-ui`, `lucide-react`, `clsx`, `tailwind-merge`).
+`zod`, `@hookform/resolvers`, `tailwindcss@4`, `@tailwindcss/postcss`, shadcn 관련(`@base-ui/react`, `lucide-react`, `clsx`, `tailwind-merge`, `class-variance-authority`, `sonner`, `tw-animate-css`, `next-themes`).
+
+shadcn의 현재 기본 스타일은 `base-nova`이고 그 프리미티브는 Radix가 아니라 `@base-ui/react`다. 또한 shadcn은 react-hook-form 전용 `Form` 컴포넌트를 폐기하고 `Field`로 대체했으므로, 폼은 `Field` + react-hook-form `Controller`로 배선한다.
 
 ### 상향
 
@@ -156,7 +158,7 @@ Prisma를 7이 아닌 6으로 잡은 것은 의도적이다. 7은 제너레이�
 | --- | --- |
 | `styled.button` 제출 버튼 | shadcn Button |
 | `styled.input` 설명 입력 | shadcn Input / Textarea |
-| react-hook-form 수동 배선 | shadcn Form (react-hook-form + zodResolver) |
+| react-hook-form 수동 배선 | shadcn Field + react-hook-form `Controller` + zodResolver |
 | 홈 티켓 카드 | shadcn Card 기반 재구성 |
 | `alert("사진에 정보가 없습니다")` | Sonner 토스트 |
 | `src/components/spiner.tsx` | Skeleton / Button disabled 상태 |

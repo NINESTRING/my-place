@@ -133,6 +133,8 @@
 ```bash
 git rm -r --quiet pages src/schema src/styles src/apollo.ts \
   src/components/pageTransitions.tsx src/components/spiner.tsx \
+  src/components/header.tsx src/components/starRating.tsx \
+  src/components/category.tsx \
   schema.gql styled.d.ts env.d.ts next.config.js
 rm -f .npmrc
 rm -rf node_modules package-lock.json
@@ -140,6 +142,8 @@ npm install
 ```
 
 `.npmrc`를 먼저 지우고 설치하는 이유: `@reach/combobox`가 제거되었으므로 `legacy-peer-deps` 없이 해소되어야 한다.
+
+`header.tsx`, `starRating.tsx`, `category.tsx`도 이 태스크에서 삭제한다. 세 파일 모두 `styled-components`를 import하므로 남겨두면 `next build`의 전체 타입 체크가 실패한다. 대체물은 뒤 태스크가 새 파일명으로 만든다: `star-rating.tsx`·`category-picker.tsx`(Task 5), `header.tsx`(Task 6). **타입 오류를 `@ts-nocheck`로 억제하지 않는다** — 삭제가 올바른 처리다.
 
 - [ ] **Step 3: 설치가 플래그 없이 성공했는지 확인**
 
@@ -306,10 +310,16 @@ npx shadcn@latest init --base radix --template next --css-variables --yes
 - [ ] **Step 11: shadcn 컴포넌트 일괄 추가**
 
 ```bash
-npx shadcn@latest add button input textarea form card sonner skeleton toggle-group --yes
+npx shadcn@latest add button input textarea field card sonner skeleton toggle-group --yes
 ```
 
-8개 이름은 모두 레지스트리에 존재함이 확인되었다. 생성물은 `src/components/ui/`에 놓인다.
+**`form`이 아니라 `field`다.** shadcn은 최신 스타일(`base-nova`)에서 react-hook-form 전용 `Form` 컴포넌트를 폐기하고 `Field`로 대체했다. `form`을 요청하면 파일 0개인 빈 스텁이 설치되어 `src/components/ui/form.tsx`가 만들어지지 않는다. `field`는 `label`과 `separator`를 registryDependency로 함께 끌어온다.
+
+생성물은 `src/components/ui/`에 놓인다. 설치 후 다음 파일이 존재하는지 확인한다: `button.tsx`, `input.tsx`, `textarea.tsx`, `field.tsx`, `label.tsx`, `card.tsx`, `sonner.tsx`, `skeleton.tsx`, `toggle-group.tsx`.
+
+`shadcn` CLI 자체는 `npx`로 실행하므로 **`package.json`의 dependencies에 `shadcn`을 넣지 않는다.** CLI가 자기 자신을 런타임 의존성으로 추가했다면 제거한다.
+
+`style`은 `base-nova`이며, 이 스타일의 프리미티브는 Radix가 아니라 `@base-ui/react`다. CLI가 `@base-ui/react`를 설치하지 않은 채 그것을 import하는 파일을 생성하는 경우가 있으므로, 생성 후 `npm ls @base-ui/react`로 확인하고 없으면 설치한다.
 
 - [ ] **Step 12: 루트 레이아웃 작성**
 
@@ -1344,10 +1354,11 @@ EOF
 - Create: `src/components/star-rating.tsx`
 - Create: `src/components/category-picker.tsx`
 - Create: `app/create/page.tsx`
-- Delete: `src/components/starRating.tsx`, `src/components/category.tsx`
+
+`src/components/starRating.tsx`와 `category.tsx`는 Task 1에서 이미 삭제되었다. 이 태스크는 새 파일명(`star-rating.tsx`, `category-picker.tsx`)으로 대체물을 만든다.
 
 **Interfaces:**
-- Consumes: `placeInputSchema`, `placeFormSchema`, `PlaceFormValues` (Task 2), `getCurrentUserId()` (Task 2), shadcn `Form`/`Button`/`Input`/`Textarea`/`ToggleGroup`/`toast` (Task 1)
+- Consumes: `placeInputSchema`, `placeFormSchema`, `PlaceFormValues` (Task 2), `getCurrentUserId()` (Task 2), `CATEGORIES` (Task 3), shadcn `Field`/`FieldLabel`/`FieldError`/`Button`/`Textarea`/`ToggleGroup` + `toast` from sonner (Task 1)
 - Produces:
   - `createUploadSignature(): Promise<{ ok: true; signature: string; timestamp: number } | { ok: false; error: string }>`
   - `createPlaceAction(input: unknown): Promise<{ ok: true; id: number } | { ok: false; error: string }>`
@@ -1507,19 +1518,12 @@ import exifr from "exifr"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type ChangeEvent } from "react"
-import { useForm } from "react-hook-form"
+import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { CategoryPicker } from "@/components/category-picker"
 import { StarRating } from "@/components/star-rating"
 import { Button } from "@/components/ui/button"
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
 import { createPlaceAction, createUploadSignature } from "@/actions/place"
 import { placeFormSchema, type PlaceFormValues } from "@/schemas/place"
@@ -1561,7 +1565,11 @@ export function PlaceForm() {
   const [exif, setExif] = useState<ExifData | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const form = useForm<PlaceFormValues>({
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<PlaceFormValues>({
     resolver: zodResolver(placeFormSchema),
     defaultValues: { description: "", rating: 3, category: 1 },
   })
@@ -1669,99 +1677,91 @@ export function PlaceForm() {
   }
 
   return (
-    <Form {...form}>
-      <form
-        onSubmit={form.handleSubmit(onSubmit)}
-        className="mx-auto max-w-xl space-y-6 px-4 py-10"
-      >
-        <div>
-          <label
-            htmlFor="photo"
-            className="border-input hover:bg-accent relative flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed transition-colors"
-          >
-            {preview ? (
-              <Image
-                src={preview}
-                alt="선택한 사진"
-                fill
-                unoptimized
-                className="object-cover"
-              />
-            ) : (
-              <div ref={lottieRef} className="h-32 w-32" />
-            )}
-          </label>
-          <input
-            id="photo"
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            onChange={onFileChange}
-          />
-          {exif && (
-            <p className="text-muted-foreground mt-2 text-sm">
-              촬영 위치 {exif.latitude.toFixed(5)}, {exif.longitude.toFixed(5)}
-            </p>
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="mx-auto max-w-xl space-y-6 px-4 py-10"
+    >
+      <div>
+        <label
+          htmlFor="photo"
+          className="border-input hover:bg-accent relative flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed transition-colors"
+        >
+          {preview ? (
+            <Image
+              src={preview}
+              alt="선택한 사진"
+              fill
+              unoptimized
+              className="object-cover"
+            />
+          ) : (
+            <div ref={lottieRef} className="h-32 w-32" />
           )}
-        </div>
+        </label>
+        <input
+          id="photo"
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={onFileChange}
+        />
+        {exif && (
+          <p className="text-muted-foreground mt-2 text-sm">
+            촬영 위치 {exif.latitude.toFixed(5)}, {exif.longitude.toFixed(5)}
+          </p>
+        )}
+      </div>
 
-        <FormField
-          control={form.control}
+      <Field>
+        <FieldLabel htmlFor="description">설명</FieldLabel>
+        <Controller
+          control={control}
           name="description"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>설명</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="이 장소는 어땠나요?"
-                  rows={3}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+            <Textarea
+              id="description"
+              placeholder="이 장소는 어땠나요?"
+              rows={3}
+              {...field}
+            />
           )}
         />
+        <FieldError errors={[errors.description]} />
+      </Field>
 
-        <FormField
-          control={form.control}
+      <Field>
+        <FieldLabel>별점</FieldLabel>
+        <Controller
+          control={control}
           name="rating"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>별점</FormLabel>
-              <FormControl>
-                <StarRating value={field.value} onChange={field.onChange} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+            <StarRating value={field.value} onChange={field.onChange} />
           )}
         />
+        <FieldError errors={[errors.rating]} />
+      </Field>
 
-        <FormField
-          control={form.control}
+      <Field>
+        <FieldLabel>카테고리</FieldLabel>
+        <Controller
+          control={control}
           name="category"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>카테고리</FormLabel>
-              <FormControl>
-                <CategoryPicker
-                  value={field.value}
-                  onChange={field.onChange}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+            <CategoryPicker value={field.value} onChange={field.onChange} />
           )}
         />
+        <FieldError errors={[errors.category]} />
+      </Field>
 
-        <Button type="submit" disabled={submitting} className="w-full">
-          {submitting ? "저장 중…" : "저장"}
-        </Button>
-      </form>
-    </Form>
+      <Button type="submit" disabled={submitting} className="w-full">
+        {submitting ? "저장 중…" : "저장"}
+      </Button>
+    </form>
   )
 }
 ```
+
+shadcn은 최신 스타일에서 react-hook-form 전용 `Form`/`FormField`를 폐기하고 `Field`로 대체했다. `Field`는 react-hook-form을 알지 못하므로 `Controller`로 직접 배선하고, 오류는 `FieldError`의 `errors` prop에 배열로 넘긴다(시그니처: `errors?: Array<{ message?: string } | undefined>`).
 
 미리보기는 `URL.createObjectURL`을 쓰고 `unoptimized`를 붙인다. 옛 코드는 `FileReader`로 data URL을 만들어 `next/image`에 넘겼는데, Cloudinary 로더가 붙은 상태에서 data URL은 처리되지 않는다. blob URL은 언마운트 시 해제한다.
 
@@ -1794,18 +1794,12 @@ export default function CreatePage() {
 }
 ```
 
-- [ ] **Step 7: 옛 컴포넌트 삭제**
-
-```bash
-git rm --quiet src/components/starRating.tsx src/components/category.tsx
-```
-
-- [ ] **Step 8: 빌드와 타입 체크**
+- [ ] **Step 7: 빌드와 타입 체크**
 
 Run: `npm run build && npx tsc --noEmit`
 Expected: 성공. **`/create`가 빌드되는 것이 이 태스크의 핵심 지표다** — 마이그레이션 전에는 lottie의 `document` 접근 때문에 "Failed to collect page data for /create"로 빌드가 실패했다.
 
-- [ ] **Step 9: 라우트 응답 확인**
+- [ ] **Step 8: 라우트 응답 확인**
 
 ```bash
 npm run dev &
@@ -1815,7 +1809,7 @@ curl -s -o /dev/null -w "create=%{http_code}\n" http://localhost:3000/create
 
 Expected: `create=200` (마이그레이션 전에는 500이었다). 확인 후 dev 서버를 종료한다.
 
-- [ ] **Step 10: 등록 흐름 수동 확인**
+- [ ] **Step 9: 등록 흐름 수동 확인**
 
 `npm run dev`로 띄운 뒤 `/create`에서 확인한다.
 
@@ -1826,7 +1820,7 @@ Expected: `create=200` (마이그레이션 전에는 500이었다). 확인 후 d
 5. 정상 입력으로 저장하면 성공 토스트가 뜨고 `/map`으로 이동하는가
 6. 이동한 지도와 홈에 새 장소가 보이는가 (`revalidatePath` 확인)
 
-- [ ] **Step 11: 커밋**
+- [ ] **Step 10: 커밋**
 
 ```bash
 git add -A
@@ -2249,7 +2243,7 @@ EOF
 | `npm run build` 통과 | Task 1 Step 14, Task 7 Step 3 |
 | `/`, `/map`, `/create` 모두 200 | Task 7 Step 4 |
 | 홈이 JS 없이 카드 렌더 | Task 3 Step 6 |
-| 사진 업로드 → EXIF → 저장 → 홈·지도 반영 | Task 5 Step 10 |
+| 사진 업로드 → EXIF → 저장 → 홈·지도 반영 | Task 5 Step 9 |
 | `npm install`이 `--legacy-peer-deps` 없이 성공 | Task 1 Step 3, Task 7 Step 3 |
 | Zod 스키마 단위 테스트 | Task 2 Step 7~10 |
 | `publicId` 추출 함수 단위 테스트 | Task 2 Step 2~6 |
