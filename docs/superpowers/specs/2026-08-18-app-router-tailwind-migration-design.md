@@ -102,7 +102,7 @@ src/
 
 ## 6. 의존성 변화
 
-### 제거 (14개)
+### 제거 (17개)
 
 | 패키지 | 사유 |
 | --- | --- |
@@ -111,8 +111,10 @@ src/
 | `styled-components` | Tailwind로 대체 |
 | `react-transition-group` | View Transitions로 대체 |
 | `@reach/combobox`, `use-places-autocomplete`, `react-google-autocomplete`, `next-cloudinary` | 코드에서 사용되지 않음 |
+| `geolib` | `nearby` 리졸버 전용. `nearby`가 이전 대상이 아니므로 미사용이 된다 |
+| `cookie`, `@types/cookie` | `pages/api/login.ts`·`logout.ts` 전용. App Router에서는 `next/headers`의 `cookies()`를 쓴다 |
 
-총 14개가 제거되며, 이 중 4개(`@reach/combobox`, `use-places-autocomplete`, `react-google-autocomplete`, `next-cloudinary`)는 애초에 코드에서 쓰이지 않던 것이다.
+총 17개가 제거된다. 이 중 4개(`@reach/combobox`, `use-places-autocomplete`, `react-google-autocomplete`, `next-cloudinary`)는 애초에 쓰이지 않던 것이고, 3개(`geolib`, `cookie`, `@types/cookie`)는 이번에 삭제되는 코드에서만 쓰였다. `js-cookie`는 유지되는 `src/auth/tokenCookies.ts`가 쓰므로 남긴다.
 
 ### 추가
 

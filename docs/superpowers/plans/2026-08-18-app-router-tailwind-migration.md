@@ -93,10 +93,8 @@
     "@hookform/resolvers": "^5.9.1",
     "@prisma/client": "^6.19.3",
     "cloudinary": "^1.32.0",
-    "cookie": "^0.5.0",
     "exifr": "^7.1.3",
     "firebase": "^12.17.1",
-    "geolib": "^3.3.3",
     "js-cookie": "^3.0.1",
     "lottie-web": "^5.9.6",
     "mapbox-gl": "^3.28.1",
@@ -111,7 +109,6 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/cookie": "^0.5.1",
     "@types/js-cookie": "^3.0.2",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
@@ -125,7 +122,9 @@
 }
 ```
 
-제거된 것: `@apollo/client`, `apollo-server-micro`, `type-graphql`, `graphql`, `micro`, `micro-cors`, `class-validator`, `reflect-metadata`, `styled-components`, `react-transition-group`, `@reach/combobox`, `use-places-autocomplete`, `react-google-autocomplete`, `next-cloudinary`, `@types/micro-cors`, `@types/react-lottie`, `@types/react-transition-group`, `@types/styled-components`, `codegen` 스크립트.
+제거된 것: `@apollo/client`, `apollo-server-micro`, `type-graphql`, `graphql`, `micro`, `micro-cors`, `class-validator`, `reflect-metadata`, `styled-components`, `react-transition-group`, `@reach/combobox`, `use-places-autocomplete`, `react-google-autocomplete`, `next-cloudinary`, `geolib`, `cookie`, `@types/cookie`, `@types/micro-cors`, `@types/react-lottie`, `@types/react-transition-group`, `@types/styled-components`, `codegen` 스크립트.
+
+`geolib`과 `cookie`는 이 태스크에서 삭제되는 코드에서만 쓰였다. `geolib`은 `nearby` 리졸버(`src/schema/place.ts`)에서만, `cookie`는 `pages/api/login.ts`·`logout.ts`에서만 사용됐다. `nearby`는 이전 대상이 아니고, App Router에서 쿠키는 `next/headers`의 `cookies()`로 다루므로 `cookie` 패키지는 다시 쓸 일이 없다. `js-cookie`는 유지되는 `src/auth/tokenCookies.ts`가 쓰므로 남긴다.
 
 `cloudinary`는 1.x를 유지한다(서버 서명 발급에만 쓰이고 API가 그대로다). `use-debounce`는 React 19 지원을 위해 10.x로 올린다.
 
