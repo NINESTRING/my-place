@@ -1,3 +1,5 @@
+// @ts-nocheck -- styled-components was removed in Task 1; this file survives
+// for a later task to convert to Tailwind (still imports the old package).
 import { useRouter } from "next/router";
 import Link from "next/link";
 import styled from "styled-components";

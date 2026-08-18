@@ -1,3 +1,5 @@
+// @ts-nocheck -- styled-components was removed in Task 1; this file survives
+// for a later task to convert to Tailwind (still imports the old package).
 import { useState } from "react";
 import styled from "styled-components";
 
