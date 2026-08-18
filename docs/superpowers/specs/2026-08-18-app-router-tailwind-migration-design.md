@@ -90,6 +90,7 @@ src/
   lib/                 prisma.ts, places.ts, cloudinary.ts, auth.ts, utils.ts(cn)
   actions/             place.ts (createPlaceAction, createUploadSignature)
   schemas/             place.ts (Zod)
+  hooks/               useLocalState, useLastData (기존 src/utils/ 에서 이전)
   auth/                (기존 Firebase 클라이언트 코드 유지)
 ```
 
@@ -124,8 +125,12 @@ src/
 | `next` | 12.3 | 16.3 |
 | `react` / `react-dom` | 18.2 | 19.2 |
 | `react-map-gl` | 7.0 | 8.1 |
+| `mapbox-gl` | 2.11 | 3.28 |
+| `use-debounce` | 8.0 | 10.x |
 | `firebase` | 9.13 | 12.x |
 | `prisma` / `@prisma/client` | 4.5 | 6.19 |
+
+`mapbox-gl` 상향은 선택이 아니다. `react-map-gl` 8이 `mapbox-gl >= 3.5.0`을 peer로 요구한다. `use-debounce`도 React 19 지원을 위해 10.x로 올린다.
 
 Prisma를 7이 아닌 6으로 잡은 것은 의도적이다. 7은 제너레이터가 `prisma-client`로 바뀌고 ESM 출력에 `output` 명시가 강제되는 큰 변경으로, 네 가지가 동시에 바뀌는 이번 작업에 얹을 위험이 아니다. 6도 4 대비 충분한 현대화다.
 
@@ -219,7 +224,7 @@ React의 `<ViewTransition>`(App Router에 네이티브 통합)으로 은은한 �
 | 위험 | 대응 |
 | --- | --- |
 | Cloudinary 로더 재구성으로 기존 이미지 URL이 깨질 수 있음 | 커스텀 로더 작성 후 홈·지도에서 실제 이미지 렌더 확인 |
-| `react-map-gl` v8의 import 경로 변경(`react-map-gl/mapbox`)과 API 변경 | 지도 팬/줌·마커·팝업을 수동 검증 |
+| `react-map-gl` v8의 import 경로 변경(`react-map-gl/mapbox`), `mapbox-gl` v2→v3 상향, 중심·줌을 `e.viewState`에서 읽도록 하는 API 변경 | 지도 팬/줌·마커·팝업을 수동 검증 |
 | Prisma 4→6 상향 시 생성 클라이언트 타입 변화 | `prisma generate` 후 타입 체크 통과 확인 |
 | React 19 + Firebase 클라이언트 코드 호환 | `"use client"` 경계 확인, 로그인 미구현이라 표면 좁음 |
 | shadcn 도입으로 시각적 결과가 달라짐 | 승인된 결정. 티켓 카드 등 특징적 요소는 형태를 유지하도록 재구성 |
