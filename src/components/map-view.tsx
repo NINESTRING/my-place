@@ -12,7 +12,11 @@ import Map, {
 import { useDebounce } from "use-debounce"
 import { useLastData } from "@/hooks/use-last-data"
 import { useLocalState } from "@/hooks/use-local-state"
-import type { PlaceWithPublicId } from "@/lib/places"
+import {
+  revivePlace,
+  type PlaceWithPublicId,
+  type SerializedPlace,
+} from "@/lib/places"
 import type { Bounds } from "@/schemas/place"
 
 type Viewport = { latitude: number; longitude: number; zoom: number }
@@ -22,6 +26,9 @@ const DEFAULT_VIEWPORT: Viewport = {
   longitude: 126.97759,
   zoom: 10,
 }
+
+// 헤더(Task 6)와 같은 --header-height 변수를 공유한다.
+const MAP_HEIGHT_CLASS = "h-[calc(100dvh-var(--header-height))] w-full"
 
 function toQuery(bounds: Bounds): string {
   return new URLSearchParams({
@@ -40,7 +47,7 @@ export function MapView({
   initialBounds: Bounds
 }) {
   const [selected, setSelected] = useState<PlaceWithPublicId | null>(null)
-  const [viewport, setViewport] = useLocalState<Viewport>(
+  const [viewport, setViewport, viewportHydrated] = useLocalState<Viewport>(
     "viewport",
     DEFAULT_VIEWPORT
   )
@@ -72,13 +79,8 @@ export function MapView({
           signal: controller.signal,
         })
         if (!res.ok) return
-        const json = (await res.json()) as { places: PlaceWithPublicId[] }
-        setPlaces(
-          json.places.map((p) => ({
-            ...p,
-            imageCreationTime: new Date(p.imageCreationTime),
-          }))
-        )
+        const json = (await res.json()) as { places: SerializedPlace[] }
+        setPlaces(json.places.map(revivePlace))
       } catch {
         // 중단되었거나 네트워크 오류. 이전 데이터를 유지한다.
       }
@@ -103,8 +105,20 @@ export function MapView({
     })
   }
 
+  // Map의 initialViewState는 마운트 시점에 한 번만 적용되고 이후로는
+  // 다시 읽지 않는다(react-map-gl v8, node_modules/@vis.gl/react-mapbox
+  // 내부 _initialize/_updateViewState 참고). 자식(Map)의 마운트 effect는
+  // 부모인 이 컴포넌트의 effect(=localStorage 읽기)보다 먼저 실행되므로,
+  // hydrated 이전에 Map을 마운트하면 항상 DEFAULT_VIEWPORT로 굳어져
+  // 저장된 위치로 복원되지 않는다. hydrated가 될 때까지 같은 크기의
+  // 빈 자리만 렌더링해 Map 마운트를 미룬다. 서버와 첫 클라이언트 렌더는
+  // 항상 이 분기를 타므로 하이드레이션 불일치도 생기지 않는다.
+  if (!viewportHydrated) {
+    return <div className={MAP_HEIGHT_CLASS} />
+  }
+
   return (
-    <div className="h-[calc(100dvh-3.5rem)] w-full">
+    <div className={MAP_HEIGHT_CLASS}>
       <Map
         initialViewState={viewport}
         onMoveEnd={onMoveEnd}

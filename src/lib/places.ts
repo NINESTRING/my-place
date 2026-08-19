@@ -19,6 +19,26 @@ function withPublicId(place: Place): PlaceWithPublicId {
   return { ...place, publicId: publicIdFromUrl(place.image) }
 }
 
+/** JSON 전송 후의 Place — Date 필드가 문자열로 바뀐 형태. */
+export type SerializedPlace = Omit<
+  PlaceWithPublicId,
+  "imageCreationTime" | "createdAt" | "updatedAt"
+> & {
+  imageCreationTime: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** SerializedPlace 를 다시 PlaceWithPublicId 로 되돌린다. */
+export function revivePlace(place: SerializedPlace): PlaceWithPublicId {
+  return {
+    ...place,
+    imageCreationTime: new Date(place.imageCreationTime),
+    createdAt: new Date(place.createdAt),
+    updatedAt: new Date(place.updatedAt),
+  }
+}
+
 export async function getAllPlaces(): Promise<PlaceWithPublicId[]> {
   const places = await prisma.place.findMany({
     take: MAX_PLACES,

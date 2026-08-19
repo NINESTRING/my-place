@@ -15,13 +15,24 @@ export const boundsSchema = z.object({
 
 export type Bounds = z.infer<typeof boundsSchema>
 
+/**
+ * URLSearchParams.get()은 파라미터가 없으면 null을 반환하고,
+ * z.coerce.number()는 Number(null) === 0이라 null을 유효한 0으로 강제해
+ * 버린다. 빈 문자열도 Number("") === 0이라 같은 문제가 있다. 강제하기
+ * 전에 null과 빈 문자열을 명시적으로 거부한다.
+ */
+const requiredNumericString = z
+  .string()
+  .min(1)
+  .pipe(z.coerce.number())
+
 /** Route Handler의 쿼리 문자열을 Bounds로 강제한다. */
 export const boundsQuerySchema = z
   .object({
-    swLat: z.coerce.number().min(-90).max(90),
-    swLng: z.coerce.number().min(-180).max(180),
-    neLat: z.coerce.number().min(-90).max(90),
-    neLng: z.coerce.number().min(-180).max(180),
+    swLat: requiredNumericString.pipe(latitude),
+    swLng: requiredNumericString.pipe(longitude),
+    neLat: requiredNumericString.pipe(latitude),
+    neLng: requiredNumericString.pipe(longitude),
   })
   .transform((q) => ({
     sw: { latitude: q.swLat, longitude: q.swLng },
