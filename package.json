@@ -11,6 +11,7 @@
     "@base-ui/react": "^1.7.0",
     "@hookform/resolvers": "^5.9.1",
     "@prisma/client": "^6.19.3",
+    "@supabase/supabase-js": "^2.112.3",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^1.32.0",
     "clsx": "^2.1.1",
