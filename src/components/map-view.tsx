@@ -2,6 +2,7 @@
 
 import "maplibre-gl/dist/maplibre-gl.css"
 
+import type { Place } from "@prisma/client"
 import Image from "next/image"
 import { useEffect, useState } from "react"
 import Map, {
@@ -12,11 +13,8 @@ import Map, {
 import { useDebounce } from "use-debounce"
 import { useLastData } from "@/hooks/use-last-data"
 import { useLocalState } from "@/hooks/use-local-state"
-import {
-  revivePlace,
-  type PlaceWithPublicId,
-  type SerializedPlace,
-} from "@/lib/places"
+import { publicImageUrl } from "@/lib/images"
+import { revivePlace, type SerializedPlace } from "@/lib/places"
 import type { Bounds } from "@/schemas/place"
 
 type Viewport = { latitude: number; longitude: number; zoom: number }
@@ -43,10 +41,10 @@ export function MapView({
   initialPlaces,
   initialBounds,
 }: {
-  initialPlaces: PlaceWithPublicId[]
+  initialPlaces: Place[]
   initialBounds: Bounds
 }) {
-  const [selected, setSelected] = useState<PlaceWithPublicId | null>(null)
+  const [selected, setSelected] = useState<Place | null>(null)
   const [viewport, setViewport, viewportHydrated] = useLocalState<Viewport>(
     "viewport",
     DEFAULT_VIEWPORT
@@ -65,9 +63,7 @@ export function MapView({
   }, [bounds, initialBounds, setBounds])
 
   const [debouncedBounds] = useDebounce(bounds, 1000)
-  const [places, setPlaces] = useState<PlaceWithPublicId[] | null>(
-    initialPlaces
-  )
+  const [places, setPlaces] = useState<Place[] | null>(initialPlaces)
   const shownPlaces = useLastData(places) ?? []
 
   useEffect(() => {
@@ -147,7 +143,7 @@ export function MapView({
               <p className="font-medium">{selected.description}</p>
               <div className="relative aspect-square w-full overflow-hidden rounded">
                 <Image
-                  src={selected.publicId}
+                  src={publicImageUrl(selected.image)}
                   alt={selected.description}
                   fill
                   sizes="260px"
