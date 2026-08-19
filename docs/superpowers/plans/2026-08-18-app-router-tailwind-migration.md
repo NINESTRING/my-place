@@ -966,6 +966,977 @@ export default function NotFound() {
 }
 ```
 
+- [ ] **Step 3: 빌드와 타입 체크**
+
+Run: `npm run build && npx tsc --noEmit`
+Expected: 성공. `/`가 동적 렌더링(`ƒ`)으로 표시된다 — DB를 읽으므로 정적화되지 않는다.
+
+- [ ] **Step 6: 홈이 서버에서 렌더되는지 확인**
+
+```bash
+npm run dev &
+sleep 15
+curl -s http://localhost:3000/ | grep -c "다녀온 장소"
+```
+
+Expected: `1` 이상. JS 실행 없이 받은 HTML에 제목이 들어 있어야 한다. DB에 데이터가 있으면 장소 설명 문자열도 HTML에 포함되는지 함께 확인한다. 확인 후 dev 서버를 종료한다.
+
+이것이 이 마이그레이션의 핵심 검증 항목이다. 옛 홈은 HTML이 비어 있고 JS가 `/api/graphql`을 호출한 뒤에야 카드가 나타났다.
+
+- [ ] **Step 5: 커밋**
+
+```bash
+git add -A
+git commit -m "$(cat <<'EOF'
+feat: Add/홈을 서버 컴포넌트로 재작성
+
+- app/page.tsx 가 Prisma 를 직접 읽어 첫 HTML 에 목록을 담아 응답
+  (기존에는 빈 화면 → JS 로드 → /api/graphql 왕복 후 렌더)
+- PlaceCard 를 shadcn Card 기반으로 재구성, 카테고리 라벨과 별점 표시 추가
+- 빈 상태 안내 추가
+- loading / error / not-found 경계 추가
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+### Task 4: 지도 — Route Handler와 클라이언트 지도
+
+**Files:**
+- Create: `app/api/places/route.ts`
+- Create: `app/map/page.tsx`
+- Create: `src/components/map-view.tsx`
+- Create: `src/hooks/use-local-state.ts`
+- Create: `src/hooks/use-last-data.ts`
+- Delete: `src/utils/useLocalState.ts`, `src/utils/useLastData.ts`
+
+**Interfaces:**
+- Consumes: `getPlacesInBounds()`, `boundsQuerySchema`, `PlaceWithPublicId` (Task 2)
+- Produces:
+  - `GET /api/places?swLat&swLng&neLat&neLng` → `{ places: PlaceWithPublicId[] }` (200) 또는 `{ error: string }` (400)
+  - `<MapView initialPlaces={...} initialBounds={...} />`
+  - `useLocalState<S>(key: string, initial: S): [S, Dispatch<SetStateAction<S>>]`
+  - `useLastData<S>(data: S): S`
+
+- [ ] **Step 1: Route Handler 작성**
+
+`app/api/places/route.ts`:
+
+```ts
+import { NextResponse, type NextRequest } from "next/server"
+import { getPlacesInBounds } from "@/lib/places"
+import { boundsQuerySchema } from "@/schemas/place"
+
+export async function GET(request: NextRequest) {
+  const sp = request.nextUrl.searchParams
+  const parsed = boundsQuerySchema.safeParse({
+    swLat: sp.get("swLat"),
+    swLng: sp.get("swLng"),
+    neLat: sp.get("neLat"),
+    neLng: sp.get("neLng"),
+  })
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "bounds 파라미터가 올바르지 않습니다" },
+      { status: 400 }
+    )
+  }
+
+  const places = await getPlacesInBounds(parsed.data)
+  return NextResponse.json({ places })
+}
+```
+
+- [ ] **Step 2: 훅 이전**
+
+`src/hooks/use-local-state.ts`:
+
+```ts
+"use client"
+
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react"
+
+export function useLocalState<S>(
+  key: string,
+  initial: S
+): [S, Dispatch<SetStateAction<S>>] {
+  const [value, setValue] = useState<S>(initial)
+
+  // 서버 렌더 결과와 어긋나지 않도록 마운트 이후에 읽는다.
+  useEffect(() => {
+    const saved = window.localStorage.getItem(key)
+    if (saved !== null) {
+      try {
+        setValue(JSON.parse(saved) as S)
+      } catch {
+        window.localStorage.removeItem(key)
+      }
+    }
+  }, [key])
+
+  useEffect(() => {
+    window.localStorage.setItem(key, JSON.stringify(value))
+  }, [key, value])
+
+  return [value, setValue]
+}
+```
+
+옛 `useLocalState`는 `useState` 초기화 함수에서 localStorage를 읽어 서버와 클라이언트의 첫 렌더 결과가 달라질 수 있었고(하이드레이션 불일치), `JSON.parse` 실패를 처리하지 않았다.
+
+`src/hooks/use-last-data.ts`:
+
+```ts
+"use client"
+
+import { useRef } from "react"
+
+/** 재조회 중 이전 데이터를 유지해 지도가 비지 않게 한다. */
+export function useLastData<S>(data: S): S {
+  const ref = useRef(data)
+  if (data !== null && data !== undefined) {
+    ref.current = data
+  }
+  return ref.current
+}
+```
+
+```bash
+git rm --quiet src/utils/useLocalState.ts src/utils/useLastData.ts
+```
+
+- [ ] **Step 3: MapView 작성**
+
+`src/components/map-view.tsx`:
+
+```tsx
+"use client"
+
+import "mapbox-gl/dist/mapbox-gl.css"
+
+import Image from "next/image"
+import { useEffect, useState } from "react"
+import Map, {
+  Marker,
+  Popup,
+  type ViewStateChangeEvent,
+} from "react-map-gl/mapbox"
+import { useDebounce } from "use-debounce"
+import { useLastData } from "@/hooks/use-last-data"
+import { useLocalState } from "@/hooks/use-local-state"
+import type { PlaceWithPublicId } from "@/lib/places"
+import type { Bounds } from "@/schemas/place"
+
+type Viewport = { latitude: number; longitude: number; zoom: number }
+
+const DEFAULT_VIEWPORT: Viewport = {
+  latitude: 37.65874,
+  longitude: 126.97759,
+  zoom: 10,
+}
+
+function toQuery(bounds: Bounds): string {
+  return new URLSearchParams({
+    swLat: String(bounds.sw.latitude),
+    swLng: String(bounds.sw.longitude),
+    neLat: String(bounds.ne.latitude),
+    neLng: String(bounds.ne.longitude),
+  }).toString()
+}
+
+export function MapView({
+  initialPlaces,
+  initialBounds,
+}: {
+  initialPlaces: PlaceWithPublicId[]
+  initialBounds: Bounds
+}) {
+  const [selected, setSelected] = useState<PlaceWithPublicId | null>(null)
+  const [viewport, setViewport] = useLocalState<Viewport>(
+    "viewport",
+    DEFAULT_VIEWPORT
+  )
+  const [bounds, setBounds] = useLocalState<Bounds>("bounds", initialBounds)
+  const [debouncedBounds] = useDebounce(bounds, 1000)
+  const [places, setPlaces] = useState<PlaceWithPublicId[] | null>(
+    initialPlaces
+  )
+  const shownPlaces = useLastData(places) ?? []
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function load() {
+      try {
+        const res = await fetch(`/api/places?${toQuery(debouncedBounds)}`, {
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const json = (await res.json()) as { places: PlaceWithPublicId[] }
+        setPlaces(
+          json.places.map((p) => ({
+            ...p,
+            imageCreationTime: new Date(p.imageCreationTime),
+          }))
+        )
+      } catch {
+        // 중단되었거나 네트워크 오류. 이전 데이터를 유지한다.
+      }
+    }
+
+    void load()
+    return () => controller.abort()
+  }, [debouncedBounds])
+
+  const onMoveEnd = (e: ViewStateChangeEvent) => {
+    const b = e.target.getBounds()
+    if (b) {
+      setBounds({
+        sw: { latitude: b.getSouth(), longitude: b.getWest() },
+        ne: { latitude: b.getNorth(), longitude: b.getEast() },
+      })
+    }
+    setViewport({
+      latitude: e.viewState.latitude,
+      longitude: e.viewState.longitude,
+      zoom: e.viewState.zoom,
+    })
+  }
+
+  return (
+    <div className="h-[calc(100dvh-3.5rem)] w-full">
+      <Map
+        initialViewState={viewport}
+        onMoveEnd={onMoveEnd}
+        mapStyle="mapbox://styles/mapbox/streets-v12"
+        mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_API_TOKEN}
+        style={{ width: "100%", height: "100%" }}
+      >
+        {shownPlaces.map((place) => (
+          <Marker
+            key={place.id}
+            latitude={place.latitude}
+            longitude={place.longitude}
+            color="#ef4444"
+            onClick={() => setSelected(place)}
+          />
+        ))}
+
+        {selected && (
+          <Popup
+            latitude={selected.latitude}
+            longitude={selected.longitude}
+            onClose={() => setSelected(null)}
+            closeOnClick={false}
+            maxWidth="260px"
+          >
+            <div className="space-y-2">
+              <p className="font-medium">{selected.description}</p>
+              <div className="relative aspect-square w-full overflow-hidden rounded">
+                <Image
+                  src={selected.publicId}
+                  alt={selected.description}
+                  fill
+                  sizes="260px"
+                  className="object-cover"
+                />
+              </div>
+            </div>
+          </Popup>
+        )}
+      </Map>
+    </div>
+  )
+}
+```
+
+v8 변경 반영: import 경로가 `react-map-gl/mapbox`이고 기본 export 이름이 `Map`이다. `e.viewState`로 중심과 줌을 얻는다(v7에서는 `e.target.getCenter()`를 호출했다). `getBounds()`는 `null`을 반환할 수 있어 확인 후 사용한다.
+
+`mapStyle`은 `streets-v9`에서 `streets-v12`로 올린다. mapbox-gl 3에서 v9 스타일은 오래된 스펙이다.
+
+옛 `map.tsx`는 bounds를 `"[[126,37],[128,38]]"` 형태의 JSON 문자열로 localStorage에 넣고 매 렌더마다 파싱했다. 구조화된 `Bounds` 객체로 바꾼다. **localStorage 키 `bounds`의 값 형식이 바뀌므로**, 이전 형식이 남아 있으면 `JSON.parse`는 성공하지만 모양이 달라 `sw`가 `undefined`가 된다. Step 4에서 이를 처리한다.
+
+- [ ] **Step 4: 옛 localStorage 형식 방어**
+
+`src/components/map-view.tsx`의 `MapView` 안, `useLocalState` 호출 직후에 다음을 추가한다.
+
+```tsx
+  // 옛 버전은 bounds 를 "[[lng,lat],[lng,lat]]" 문자열로 저장했다.
+  // 형식이 맞지 않으면 초기값으로 되돌린다.
+  useEffect(() => {
+    const malformed =
+      typeof bounds?.sw?.latitude !== "number" ||
+      typeof bounds?.ne?.latitude !== "number"
+    if (malformed) {
+      setBounds(initialBounds)
+    }
+  }, [bounds, initialBounds, setBounds])
+```
+
+`viewport`도 같은 이유로 확인이 필요하나, 옛 형식이 `{latitude, longitude, zoom}`으로 동일해 추가 처리가 필요 없다.
+
+- [ ] **Step 5: 지도 페이지 작성**
+
+`app/map/page.tsx`:
+
+```tsx
+import { MapView } from "@/components/map-view"
+import { getPlacesInBounds } from "@/lib/places"
+import type { Bounds } from "@/schemas/place"
+
+// 홈과 같은 이유로 정적 프리렌더를 끈다.
+export const dynamic = "force-dynamic"
+
+const INITIAL_BOUNDS: Bounds = {
+  sw: { latitude: 37, longitude: 126 },
+  ne: { latitude: 38, longitude: 128 },
+}
+
+export default async function MapPage() {
+  const places = await getPlacesInBounds(INITIAL_BOUNDS)
+
+  return <MapView initialPlaces={places} initialBounds={INITIAL_BOUNDS} />
+}
+```
+
+초기 bounds는 옛 기본값 `[[126,37],[128,38]]`과 동일한 영역이다. 서버에서 미리 읽어 넘기므로 지도가 처음 뜰 때 마커가 이미 있다.
+
+- [ ] **Step 6: 빌드와 타입 체크**
+
+Run: `npm run build && npx tsc --noEmit`
+Expected: 성공
+
+- [ ] **Step 7: Route Handler 동작 확인**
+
+```bash
+npm run dev &
+sleep 15
+echo "-- 정상 --"
+curl -s "http://localhost:3000/api/places?swLat=37&swLng=126&neLat=38&neLng=128" | head -c 200
+echo
+echo "-- 잘못된 파라미터 --"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:3000/api/places?swLat=abc"
+echo "-- 지도 페이지 --"
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/map
+```
+
+Expected: 정상 요청은 `{"places":[...]}`, 잘못된 파라미터는 `400`, `/map`은 `200`. 확인 후 dev 서버를 종료한다.
+
+- [ ] **Step 8: 브라우저 수동 확인**
+
+`npm run dev`로 띄운 뒤 `/map`에서 확인한다.
+
+1. 마커가 표시되는가 (DB에 데이터가 있는 경우)
+2. 지도를 드래그하면 1초 후 새 요청이 나가는가 (네트워크 탭에서 `/api/places` 확인)
+3. 마커를 클릭하면 팝업에 설명과 사진이 뜨는가
+4. 새로고침 후 마지막으로 보던 위치가 유지되는가
+5. 콘솔에 하이드레이션 경고가 없는가
+
+- [ ] **Step 9: 커밋**
+
+```bash
+git add -A
+git commit -m "$(cat <<'EOF'
+feat: Add/지도 라우트 — GET Route Handler + 클라이언트 지도
+
+- app/api/places/route.ts: bounds 조회를 GET 으로 노출, Zod 로 쿼리 검증
+  (서버 액션은 POST 전용·순차 실행이라 팬/줌 재조회에 부적합)
+- app/map/page.tsx 가 초기 데이터를 서버에서 읽어 넘김
+- react-map-gl v8 대응: import 를 react-map-gl/mapbox 로, 중심·줌을
+  e.viewState 에서 읽도록 변경, mapStyle streets-v9→v12
+- useLocalState 를 마운트 이후 읽도록 바꿔 하이드레이션 불일치 제거,
+  JSON.parse 실패와 옛 bounds 형식 방어 추가
+- src/utils/* 훅을 src/hooks/* 로 이전
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+### Task 5: 등록 — 서버 액션과 폼
+
+**Files:**
+- Create: `src/actions/place.ts`
+- Create: `src/components/place-form.tsx`
+- Create: `src/components/star-rating.tsx`
+- Create: `src/components/category-picker.tsx`
+- Create: `app/create/page.tsx`
+
+`src/components/starRating.tsx`와 `category.tsx`는 Task 1에서 이미 삭제되었다. 이 태스크는 새 파일명(`star-rating.tsx`, `category-picker.tsx`)으로 대체물을 만든다.
+
+**Interfaces:**
+- Consumes: `placeInputSchema`, `placeFormSchema`, `PlaceFormValues` (Task 2), `getCurrentUserId()` (Task 2), `CATEGORIES` (Task 3), shadcn `Field`/`FieldLabel`/`FieldError`/`Button`/`Textarea`/`ToggleGroup` + `toast` from sonner (Task 1)
+- Produces:
+  - `createUploadSignature(): Promise<{ ok: true; signature: string; timestamp: number } | { ok: false; error: string }>`
+  - `createPlaceAction(input: unknown): Promise<{ ok: true; id: number } | { ok: false; error: string }>`
+  - `<StarRating value={number} onChange={(v: number) => void} />`
+  - `<CategoryPicker value={number} onChange={(v: number) => void} />`
+
+- [ ] **Step 1: 서버 액션 작성**
+
+`src/actions/place.ts`:
+
+```ts
+"use server"
+
+import { revalidatePath } from "next/cache"
+import { v2 as cloudinary } from "cloudinary"
+import { getCurrentUserId } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+import { placeInputSchema } from "@/schemas/place"
+
+export type ActionResult<T> =
+  | ({ ok: true } & T)
+  | { ok: false; error: string }
+
+export async function createUploadSignature(): Promise<
+  ActionResult<{ signature: string; timestamp: number }>
+> {
+  const secret = process.env.CLOUDINARY_SECRET
+  if (!secret) {
+    return { ok: false, error: "Cloudinary 설정이 없습니다" }
+  }
+
+  const timestamp = Math.round(Date.now() / 1000)
+  const signature = cloudinary.utils.api_sign_request({ timestamp }, secret)
+  return { ok: true, signature, timestamp }
+}
+
+export async function createPlaceAction(
+  input: unknown
+): Promise<ActionResult<{ id: number }>> {
+  const parsed = placeInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "입력이 올바르지 않습니다" }
+  }
+
+  const userId = await getCurrentUserId()
+
+  try {
+    const place = await prisma.place.create({
+      data: { ...parsed.data, userId },
+    })
+    revalidatePath("/")
+    revalidatePath("/map")
+    return { ok: true, id: place.id }
+  } catch {
+    return { ok: false, error: "저장에 실패했습니다" }
+  }
+}
+```
+
+서명 발급이 서버 액션으로 옮겨져 `CLOUDINARY_SECRET`은 서버에만 머문다.
+
+`revalidatePath`는 홈과 지도가 `force-dynamic`이어도 여전히 필요하다. 서버는 매 요청 재렌더하지만 **클라이언트 Router Cache**는 RSC 페이로드를 잠시 보관하므로, 저장 직후 클라이언트 내비게이션으로 홈에 돌아가면 방금 만든 장소가 빠진 화면을 볼 수 있다. `revalidatePath`가 그 캐시까지 무효화한다. 옛 코드에는 이에 대응하는 동작이 없어 Apollo 캐시가 낡은 상태로 남았다.
+
+- [ ] **Step 2: StarRating 작성**
+
+`src/components/star-rating.tsx`:
+
+```tsx
+"use client"
+
+import { cn } from "@/lib/utils"
+
+const STARS = [1, 2, 3, 4, 5]
+
+export function StarRating({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="flex gap-1" role="radiogroup" aria-label="별점">
+      {STARS.map((star) => (
+        <button
+          key={star}
+          type="button"
+          role="radio"
+          aria-checked={value === star}
+          aria-label={`${star}점`}
+          onClick={() => onChange(star)}
+          className={cn(
+            "focus-visible:ring-ring rounded text-2xl leading-none transition-colors focus-visible:ring-2 focus-visible:outline-none",
+            star <= value ? "text-amber-400" : "text-muted-foreground/40"
+          )}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  )
+}
+```
+
+옛 `starRating.tsx`는 SVG `<polygon>`을 5번 복사하고 클릭 핸들러를 각각 인라인으로 달았으며 자체 `useState`로 값을 들고 있어 폼과 상태가 이중화되어 있었다. 값은 폼이 소유하고 이 컴포넌트는 표시만 한다.
+
+- [ ] **Step 3: CategoryPicker 작성**
+
+`src/components/category-picker.tsx`:
+
+```tsx
+"use client"
+
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { CATEGORIES } from "@/lib/categories"
+
+export function CategoryPicker({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <ToggleGroup
+      value={[String(value)]}
+      onValueChange={(next) => {
+        const selected = next[0]
+        if (selected) onChange(Number(selected))
+      }}
+      variant="outline"
+      className="justify-start"
+    >
+      {CATEGORIES.map((category) => (
+        <ToggleGroupItem
+          key={category.value}
+          value={String(category.value)}
+          aria-label={category.label}
+        >
+          {category.label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  )
+}
+```
+
+`@base-ui/react`의 `ToggleGroup`은 Radix와 달리 `type` prop이 없고 값을 **배열**로 다룬다(단일 선택이 기본). 경계에서 숫자↔문자열을 변환하고, 선택 해제로 빈 배열이 오면 무시해 항상 하나가 선택된 상태를 유지한다. 라벨은 Task 3에서 만든 `@/lib/categories`를 공유하므로 `PlaceCard`와 어긋날 수 없다.
+
+- [ ] **Step 4: 등록 폼 작성**
+
+`src/components/place-form.tsx`:
+
+```tsx
+"use client"
+
+import { zodResolver } from "@hookform/resolvers/zod"
+import exifr from "exifr"
+import Image from "next/image"
+import { useRouter } from "next/navigation"
+import { useEffect, useRef, useState, type ChangeEvent } from "react"
+import { Controller, useForm } from "react-hook-form"
+import { toast } from "sonner"
+import { CategoryPicker } from "@/components/category-picker"
+import { StarRating } from "@/components/star-rating"
+import { Button } from "@/components/ui/button"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
+import { Textarea } from "@/components/ui/textarea"
+import { createPlaceAction, createUploadSignature } from "@/actions/place"
+import { placeFormSchema, type PlaceFormValues } from "@/schemas/place"
+
+type ExifData = {
+  latitude: number
+  longitude: number
+  createDate: Date
+}
+
+async function uploadToCloudinary(
+  file: File,
+  signature: string,
+  timestamp: number
+): Promise<string> {
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+  const formData = new FormData()
+  formData.append("file", file)
+  formData.append("signature", signature)
+  formData.append("timestamp", String(timestamp))
+  formData.append("api_key", process.env.NEXT_PUBLIC_CLOUDINARY_KEY ?? "")
+
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
+    { method: "POST", body: formData }
+  )
+  if (!res.ok) throw new Error("이미지 업로드에 실패했습니다")
+
+  const json = (await res.json()) as { secure_url?: string }
+  if (!json.secure_url) throw new Error("이미지 업로드 응답이 올바르지 않습니다")
+  return json.secure_url
+}
+
+export function PlaceForm() {
+  const router = useRouter()
+  const lottieRef = useRef<HTMLDivElement>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [exif, setExif] = useState<ExifData | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<PlaceFormValues>({
+    resolver: zodResolver(placeFormSchema),
+    defaultValues: { description: "", rating: 3, category: 1 },
+  })
+
+  // lottie-web 은 import 시점에 document 에 접근하므로 브라우저에서만 불러온다.
+  // 옛 코드는 최상위 정적 import 를 해서 /create 의 SSR 이 깨졌다.
+  useEffect(() => {
+    let destroy: (() => void) | undefined
+
+    void (async () => {
+      if (!lottieRef.current) return
+      const [{ default: lottie }, { default: animationData }] =
+        await Promise.all([
+          import("lottie-web"),
+          import("@/assets/photo-upload.json"),
+        ])
+      const animation = lottie.loadAnimation({
+        container: lottieRef.current,
+        renderer: "svg",
+        loop: false,
+        autoplay: true,
+        animationData,
+      })
+      destroy = () => animation.destroy()
+    })()
+
+    return () => destroy?.()
+  }, [])
+
+  const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0]
+    if (!selected) return
+
+    try {
+      const parsed = await exifr.parse(selected)
+      if (parsed?.latitude == null || parsed?.longitude == null) {
+        toast.error("사진에 위치 정보가 없습니다. 다른 사진을 선택해 주세요.")
+        event.target.value = ""
+        return
+      }
+
+      setFile(selected)
+      setExif({
+        latitude: parsed.latitude,
+        longitude: parsed.longitude,
+        createDate: parsed.CreateDate ?? new Date(selected.lastModified),
+      })
+      setPreview(URL.createObjectURL(selected))
+    } catch {
+      toast.error("사진을 읽지 못했습니다.")
+      event.target.value = ""
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview)
+    }
+  }, [preview])
+
+  const onSubmit = async (values: PlaceFormValues) => {
+    if (!file || !exif) {
+      toast.error("사진을 먼저 선택해 주세요.")
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const signatureResult = await createUploadSignature()
+      if (!signatureResult.ok) {
+        toast.error(signatureResult.error)
+        return
+      }
+
+      const imageUrl = await uploadToCloudinary(
+        file,
+        signatureResult.signature,
+        signatureResult.timestamp
+      )
+
+      const result = await createPlaceAction({
+        description: values.description,
+        image: imageUrl,
+        imageCreationTime: exif.createDate,
+        latitude: exif.latitude,
+        longitude: exif.longitude,
+        rating: values.rating,
+        category: values.category,
+      })
+
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+
+      toast.success("장소를 저장했습니다.")
+      // 성공 시에는 setSubmitting(false)를 하지 않는다. router.push는 await되지
+      // 않으므로 여기서 버튼을 되살리면 내비게이션이 끝나기 전에 두 번째 제출이
+      // 들어와 같은 장소가 중복 저장될 수 있다.
+      router.push("/map")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "저장 중 문제가 발생했습니다."
+      )
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="mx-auto max-w-xl space-y-6 px-4 py-10"
+    >
+      <div>
+        <label
+          htmlFor="photo"
+          className="border-input hover:bg-accent relative flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed transition-colors"
+        >
+          {preview ? (
+            <Image
+              src={preview}
+              alt="선택한 사진"
+              fill
+              unoptimized
+              className="object-cover"
+            />
+          ) : (
+            <div ref={lottieRef} className="h-32 w-32" />
+          )}
+        </label>
+        <input
+          id="photo"
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={onFileChange}
+        />
+        {exif && (
+          <p className="text-muted-foreground mt-2 text-sm">
+            촬영 위치 {exif.latitude.toFixed(5)}, {exif.longitude.toFixed(5)}
+          </p>
+        )}
+      </div>
+
+      <Field>
+        <FieldLabel htmlFor="description">설명</FieldLabel>
+        <Controller
+          control={control}
+          name="description"
+          render={({ field }) => (
+            <Textarea
+              id="description"
+              placeholder="이 장소는 어땠나요?"
+              rows={3}
+              {...field}
+            />
+          )}
+        />
+        <FieldError errors={[errors.description]} />
+      </Field>
+
+      <Field>
+        <FieldLabel>별점</FieldLabel>
+        <Controller
+          control={control}
+          name="rating"
+          render={({ field }) => (
+            <StarRating value={field.value} onChange={field.onChange} />
+          )}
+        />
+        <FieldError errors={[errors.rating]} />
+      </Field>
+
+      <Field>
+        <FieldLabel>카테고리</FieldLabel>
+        <Controller
+          control={control}
+          name="category"
+          render={({ field }) => (
+            <CategoryPicker value={field.value} onChange={field.onChange} />
+          )}
+        />
+        <FieldError errors={[errors.category]} />
+      </Field>
+
+      <Button type="submit" disabled={submitting} className="w-full">
+        {submitting ? "저장 중…" : "저장"}
+      </Button>
+    </form>
+  )
+}
+```
+
+제출 핸들러는 성공 시 버튼을 되살리지 않는다. 실패로 조기 반환하는 경로(서명 실패, 액션 실패)에서는 각각 `setSubmitting(false)`를 호출해야 한다.
+
+EXIF 좌표 판정에 `!parsed?.latitude`를 쓰면 안 된다. 위도 0(적도)이나 경도 0(본초자오선)이 falsy라 GPS가 있는 사진을 거부한다. `== null`로 존재 여부만 본다.
+
+shadcn은 최신 스타일에서 react-hook-form 전용 `Form`/`FormField`를 폐기하고 `Field`로 대체했다. `Field`는 react-hook-form을 알지 못하므로 `Controller`로 직접 배선하고, 오류는 `FieldError`의 `errors` prop에 배열로 넘긴다(시그니처: `errors?: Array<{ message?: string } | undefined>`).
+
+미리보기는 `URL.createObjectURL`을 쓰고 `unoptimized`를 붙인다. 옛 코드는 `FileReader`로 data URL을 만들어 `next/image`에 넘겼는데, Cloudinary 로더가 붙은 상태에서 data URL은 처리되지 않는다. blob URL은 언마운트 시 해제한다.
+
+옛 `create.tsx`의 `register("image")` 사용은 `{...(register("image"), { required: true })}`로 쉼표 연산자 때문에 `register` 결과가 버려지고 `{required: true}`만 적용되는 버그였다. 파일은 폼 필드에서 분리해 별도 상태로 다룬다.
+
+- [ ] **Step 5: Lottie 애셋 경로 정리**
+
+```bash
+mkdir -p src/assets
+git mv src/assets/photoUpload.json src/assets/photo-upload.json 2>/dev/null || \
+  mv src/assets/photoUpload.json src/assets/photo-upload.json
+```
+
+`tsconfig.json`의 `resolveJsonModule`이 이미 `true`이므로 JSON 동적 import가 동작한다.
+
+- [ ] **Step 6: 등록 페이지 작성**
+
+`app/create/page.tsx`:
+
+```tsx
+import { PlaceForm } from "@/components/place-form"
+
+export default function CreatePage() {
+  return (
+    <main>
+      <h1 className="sr-only">장소 등록</h1>
+      <PlaceForm />
+    </main>
+  )
+}
+```
+
+- [ ] **Step 7: 빌드와 타입 체크**
+
+Run: `npm run build && npx tsc --noEmit`
+Expected: 성공. **`/create`가 빌드되는 것이 이 태스크의 핵심 지표다** — 마이그레이션 전에는 lottie의 `document` 접근 때문에 "Failed to collect page data for /create"로 빌드가 실패했다.
+
+- [ ] **Step 8: 라우트 응답 확인**
+
+```bash
+npm run dev &
+sleep 15
+curl -s -o /dev/null -w "create=%{http_code}\n" http://localhost:3000/create
+```
+
+Expected: `create=200` (마이그레이션 전에는 500이었다). 확인 후 dev 서버를 종료한다.
+
+- [ ] **Step 9: 등록 흐름 수동 확인**
+
+`npm run dev`로 띄운 뒤 `/create`에서 확인한다.
+
+1. Lottie 애니메이션이 재생되는가
+2. GPS 정보가 있는 사진을 선택하면 미리보기와 좌표가 표시되는가
+3. GPS 정보가 없는 사진을 선택하면 토스트 경고가 뜨고 선택이 취소되는가
+4. 설명을 비운 채 저장을 누르면 필드 오류 메시지가 뜨는가
+5. 정상 입력으로 저장하면 성공 토스트가 뜨고 `/map`으로 이동하는가
+6. 이동한 지도와 홈에 새 장소가 보이는가 (`revalidatePath` 확인)
+
+- [ ] **Step 10: 커밋**
+
+```bash
+git add -A
+git commit -m "$(cat <<'EOF'
+feat: Add/등록 폼을 서버 액션 기반으로 재작성
+
+- src/actions/place.ts: createPlaceAction, createUploadSignature
+  Zod 로 서버측 재검증, 저장 후 revalidatePath 로 홈·지도 갱신
+- shadcn Form(react-hook-form + zodResolver) 으로 폼 재구성,
+  alert 을 sonner 토스트로 교체
+- lottie-web 을 useEffect 안 동적 import 로 바꿔 /create SSR 오류 해소
+  (기존에는 dev 500, build 실패)
+- 미리보기를 data URL 에서 blob URL 로 바꿔 Cloudinary 로더와 충돌 제거
+- register("image") 의 쉼표 연산자 오용 제거, 파일을 별도 상태로 분리
+- StarRating·CategoryPicker 를 값 소유 없는 표시 컴포넌트로 재작성
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+### Task 6: Header와 View Transitions
+
+**Files:**
+- Modify: `src/components/header.tsx` (기존 파일 전체를 덮어쓴다. 옛 버전은 styled-components를 쓰고 default export였다)
+- Modify: `app/layout.tsx`
+
+**Interfaces:**
+- Consumes: `cn()` (Task 1)
+- Produces: `<Header />`
+
+- [ ] **Step 1: Header 작성**
+
+`src/components/header.tsx` (기존 파일을 덮어쓴다):
+
+```tsx
+"use client"
+
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { cn } from "@/lib/utils"
+
+const LINKS = [
+  { href: "/", label: "홈" },
+  { href: "/create", label: "등록" },
+  { href: "/map", label: "지도" },
+]
+
+export function Header() {
+  const pathname = usePathname()
+
+  return (
+    <header className="bg-background/80 border-border sticky top-0 z-10 flex h-[var(--header-height)] items-center justify-center gap-1 border-b backdrop-blur">
+      <nav className="flex gap-1">
+        {LINKS.map((link) => {
+          const active = pathname === link.href
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm transition-colors",
+                active
+                  ? "bg-accent text-accent-foreground font-medium"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {link.label}
+            </Link>
+          )
+        })}
+      </nav>
+    </header>
+  )
+}
+```
+
+옛 헤더에는 버그가 있었다 — Create 링크의 활성 조건이 `route === "/about"`이어서 어떤 경로에서도 활성화되지 않았다. `usePathname()`으로 정확히 비교한다. 또한 옛 헤더는 `position: fixed`에 `height: 7vh`였고 각 페이지가 `margin-top: 7vh`로 보정했다. `sticky`와 `h-[var(--header-height)]`로 바꿔 보정이 필요 없게 한다. `--header-height`는 Task 4에서 `app/globals.css`의 `:root`에 추가한 변수로, 지도 뷰포트 높이 계산과 값을 공유한다.
+
+- [ ] **Step 2: 페이지 전환은 구현하지 않는다**
+
+설계 단계에서는 React의 `<ViewTransition>`으로 크로스페이드를 넣기로 했으나, 실제 설치된 버전에서 사용할 수 없음이 확인되었다.
+
+- `react@19.2.8`은 `ViewTransition`도 `unstable_ViewTransition`도 export하지 않는다.
+- `next@16.3.1`의 config 스키마에 `experimental.viewTransition` 키가 없어 내부의 `react-experimental` 번들로 전환할 방법이 없다.
+
+CSS만 넣는 대체안도 성립하지 않는다. `::view-transition-*`는 전환이 실제로 시작되어야 적용되는데, App Router의 클라이언트 내비게이션은 same-document라 브라우저가 자동으로 시작하지 않는다. 규칙만 남고 아무것도 실행되지 않는 죽은 코드가 된다.
+
+프로젝트 소유자 결정에 따라 **전환 효과 없이 마무리한다.** `::view-transition-*` CSS를 넣지 않고, `app/layout.tsx`는 `{children}`을 그대로 렌더한다. 이 사실을 Task 7에서 README에 기록한다.
+
+`react-transition-group`은 Task 1에서 이미 제거되었으므로 추가 정리는 없다.
+
 - [ ] **Step 5: 빌드와 타입 체크**
 
 Run: `npm run build && npx tsc --noEmit`
@@ -2017,13 +2988,12 @@ import { unstable_ViewTransition as ViewTransition } from "react"
 Run: `npm run build && npx tsc --noEmit`
 Expected: 성공
 
-- [ ] **Step 6: 전환과 내비게이션 수동 확인**
+- [ ] **Step 4: 내비게이션 수동 확인**
 
 `npm run dev`로 띄운 뒤 확인한다.
 
 1. 헤더의 세 링크가 각 페이지로 이동하는가
 2. 현재 페이지 링크가 활성 표시되는가 (특히 `/create` — 옛 버전에서는 되지 않았다)
-3. 페이지 이동 시 크로스페이드가 보이는가 (미지원 브라우저에서는 즉시 전환되며, 이는 정상이다)
 4. 헤더가 지도 위에 겹치지 않고 지도 높이가 화면에 맞는가
 
 - [ ] **Step 7: 커밋**

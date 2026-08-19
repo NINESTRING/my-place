@@ -173,7 +173,11 @@ shadcn 채택은 시각적 결과가 현재와 달라짐을 의미한다(중립 
 
 `pages/_app.tsx:22`의 `router.events`는 App Router에 존재하지 않는 API다. 이에 의존하는 `pageTransitions.tsx`의 와이프 연출(스크롤 오프셋만큼 이전 페이지를 밀어 올리며 회색 막이 1초간 덮음)은 그대로 옮길 수 없다. App Router의 `template.tsx`는 언마운트 시점을 제어할 수 없어 exit 애니메이션 자체가 불가능하다.
 
-React의 `<ViewTransition>`(App Router에 네이티브 통합)으로 은은한 크로스페이드를 구성한다. 의존성이 추가되지 않으며, 미지원 브라우저에서는 애니메이션 없이 정상 동작한다. 기존의 회색 와이프는 재현하지 않는다.
+당초 React의 `<ViewTransition>`으로 은은한 크로스페이드를 구성하기로 했으나, 구현 중 사용 불가로 확인되었다. `react@19.2.8`은 해당 컴포넌트를 export하지 않고, `next@16.3.1`에는 실험 빌드로 전환하는 config 키가 없다. 설계 시 참조한 문서는 canary 기준이었다.
+
+CSS만 남기는 대체안도 성립하지 않는다. `::view-transition-*`는 전환이 실제로 시작되어야 적용되는데 App Router의 클라이언트 내비게이션은 same-document라 브라우저가 자동으로 시작하지 않는다.
+
+**결정: 페이지 전환 효과 없이 마무리한다.** 기존의 회색 와이프는 재현하지 않으며 대체 애니메이션도 넣지 않는다. React가 `ViewTransition`을 안정 API로 내보내면 그때 추가한다.
 
 ## 8. 이미지 처리
 
