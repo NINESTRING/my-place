@@ -1,5 +1,15 @@
 "use client"
 
+// maplibre-gl 은 5.x 에 고정한다. 6.x 는 워커 URL 을 import.meta.url 에서
+// 유도하고 그 값이 http(s) URL 이 아니면 빈 문자열을 반환하는데(dist/
+// maplibre-gl.mjs 의 워커 URL 헬퍼 참고), Turbopack 이 번들한 청크에서는
+// http URL 이 아니라서 워커 URL 이 ""가 되고 현재 문서 경로로 해석된다.
+// 그러면 dev 서버가 HTML 을 돌려주어 "Failed to load module script: ...
+// non-JavaScript MIME type of text/html" 로 워커가 죽고, 타일 fetch·파싱이
+// 전부 워커에서 일어나므로 스타일과 스프라이트만 200 으로 로드된 채 지도가
+// 빈 화면이 된다. 예외도 안 나므로 조용히 실패한다.
+// 5.x 는 워커를 인라인 Blob 으로 만들어 번들러에 무관하게 동작한다.
+// src/lib/deps.test.ts 가 실수로 6.x 로 올라가는 것을 막는다.
 import "maplibre-gl/dist/maplibre-gl.css"
 
 import type { Place } from "@prisma/client"

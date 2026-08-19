@@ -30,7 +30,8 @@
   지도 bounds 재조회는 Route Handler(GET)
 - **검증**: Zod (클라이언트 폼과 서버 액션이 스키마 공유)
 - **DB / ORM**: PostgreSQL (Supabase) + Prisma 6
-- **지도**: MapLibre GL (`react-map-gl` 8) + OpenFreeMap 타일
+- **지도**: MapLibre GL 5 (`react-map-gl` 8) + OpenFreeMap 타일
+  (`maplibre-gl`은 **5.x에 고정**되어 있습니다 — 아래 알려진 이슈 참고)
 - **이미지**: Supabase Storage (public 버킷) + next/image 내장 최적화
 - **인증**: 미구현. 벤더는 Supabase Auth로 확정했습니다. `src/lib/auth.ts`의 `getCurrentUserId()`가 고정값 `"1"`을 반환하는 스텁입니다.
 - **테스트**: Vitest
@@ -140,8 +141,11 @@ npm run test:watch  # Vitest 단위 테스트(watch 모드)
 
 - **인증이 구현되어 있지 않습니다.** 모든 쓰기 경로는
   `src/lib/auth.ts`의 `getCurrentUserId()`를 통과하며, 이 함수는 고정값
-  `"1"`을 반환합니다. 인증 벤더는 Supabase Auth로 확정했으며, 인증을 붙일
-  때 이 함수 하나만 실제 구현으로 바꾸면 됩니다.
+  `"1"`을 반환합니다. 인증 벤더는 Supabase Auth로 확정했습니다.
+  **다만 이 함수 하나만 바꾸면 끝나는 것은 아닙니다** — 발급된 서명 업로드
+  URL의 경로와 `createPlaceAction`에 제출된 경로가 바인딩되지 않아, 인증이
+  붙는 순간 다른 사용자의 이미지를 자기 행에 붙일 수 있게 됩니다. 자세한
+  내용은 `src/actions/place.ts` 상단 주석에 있습니다.
 - 홈 카드가 shadcn Card 기반으로 재구성되면서, 이전의 티켓 절취선 디자인은
   더 이상 재현하지 않습니다.
 - 테스트는 Zod 스키마와 순수 함수에 대한 Vitest 단위 테스트만 있습니다.
@@ -151,3 +155,14 @@ npm run test:watch  # Vitest 단위 테스트(watch 모드)
   제외했습니다.
 - **HEIC 미지원** — 파일 선택이 JPEG·PNG·WebP로 제한됩니다. Next.js 내장 이미지 최적화가 HEIC 출력을 지원하지 않기 때문입니다.
 - **OpenFreeMap 타일은 SLA가 없습니다.** 기부로 운영되는 무료 서비스입니다. 안정성이 필요해지면 `mapStyle` URL만 다른 제공자로 바꾸면 됩니다.
+- **`maplibre-gl`을 6.x로 올리면 지도가 빈 화면이 됩니다.** 6.x는 워커 URL을
+  `import.meta.url`에서 유도하고 그 값이 `http(s)` URL이 아니면 빈 문자열을
+  반환합니다. Turbopack이 번들한 청크에서는 `http` URL이 아니므로 워커 URL이
+  `""`가 되어 현재 문서 경로로 해석되고, dev 서버가 HTML을 돌려주면서 워커가
+  죽습니다. 타일 fetch와 파싱이 전부 워커에서 일어나기 때문에 스타일과
+  스프라이트만 200으로 로드된 채 지도가 비어 보이며, **예외가 발생하지 않아
+  단위 테스트·타입 체크·빌드가 모두 통과합니다.** 5.x는 워커를 인라인 Blob으로
+  만들어 번들러에 무관하게 동작합니다. `src/lib/deps.test.ts`가 실수로 올라가는
+  것을 막습니다. 6.x로 올리려면 `setWorkerUrl`(`react-map-gl`의 `workerUrl`
+  prop)로 워커를 직접 지정하고, 올린 뒤 **브라우저에서 타일이 실제로 그려지는지
+  눈으로 확인**해야 합니다.
