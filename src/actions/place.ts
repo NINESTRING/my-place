@@ -1,5 +1,12 @@
 "use server"
 
+/**
+ * 주의: 이 액션들에는 인가 검사가 없다. 인증은 이번 마이그레이션의 명시적
+ * 비목표이며, userId 는 src/lib/auth.ts 의 getCurrentUserId() 가 반환하는
+ * 고정값 "1" 이다. 인증을 붙일 때 그 함수 하나만 실제 구현으로 바꾸면
+ * 모든 쓰기 경로에 적용된다.
+ */
+
 import { revalidatePath } from "next/cache"
 import { v2 as cloudinary } from "cloudinary"
 import { getCurrentUserId } from "@/lib/auth"

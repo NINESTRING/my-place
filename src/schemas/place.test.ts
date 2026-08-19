@@ -50,6 +50,35 @@ describe("placeInputSchema", () => {
     ).toBe(false)
   })
 
+  it("Cloudinary 이미지 URL을 통과시킨다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      image: "https://res.cloudinary.com/demo/image/upload/v1/a.jpg",
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("URL이 아닌 문자열을 image로 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      image: "not-a-url",
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("Cloudinary가 아닌 호스트의 URL을 image로 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      image: "https://evil.example.com/a.jpg",
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("빈 문자열을 image로 거부한다", () => {
+    const result = placeInputSchema.safeParse({ ...validInput, image: "" })
+    expect(result.success).toBe(false)
+  })
+
   it("ISO 문자열 날짜를 Date로 강제한다", () => {
     const result = placeInputSchema.safeParse({
       ...validInput,

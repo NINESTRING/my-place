@@ -92,7 +92,7 @@ export function PlaceForm() {
 
     try {
       const parsed = await exifr.parse(selected)
-      if (!parsed?.latitude || !parsed?.longitude) {
+      if (parsed?.latitude == null || parsed?.longitude == null) {
         toast.error("사진에 위치 정보가 없습니다. 다른 사진을 선택해 주세요.")
         event.target.value = ""
         return
@@ -128,6 +128,7 @@ export function PlaceForm() {
       const signatureResult = await createUploadSignature()
       if (!signatureResult.ok) {
         toast.error(signatureResult.error)
+        setSubmitting(false)
         return
       }
 
@@ -149,16 +150,20 @@ export function PlaceForm() {
 
       if (!result.ok) {
         toast.error(result.error)
+        setSubmitting(false)
         return
       }
 
+      // 성공 경로에서는 submitting 을 다시 풀지 않는다. router.push 는
+      // await 하지 않으므로 클라이언트 내비게이션이 진행되는 동안 버튼을
+      // 재활성화하면 빠른 재클릭이 createPlaceAction 을 한 번 더 실행해
+      // 중복 Place 를 만들 수 있다. 페이지가 교체될 때까지 비활성 상태를 유지한다.
       toast.success("장소를 저장했습니다.")
       router.push("/map")
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "저장 중 문제가 발생했습니다."
       )
-    } finally {
       setSubmitting(false)
     }
   }

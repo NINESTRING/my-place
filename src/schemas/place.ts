@@ -41,7 +41,12 @@ export const boundsQuerySchema = z
 
 export const placeInputSchema = z.object({
   description: z.string().min(1, "설명을 입력해 주세요").max(500),
-  image: z.string().min(1),
+  image: z
+    .string()
+    .url()
+    .refine((u) => u.startsWith("https://res.cloudinary.com/"), {
+      message: "이미지 URL이 올바르지 않습니다",
+    }),
   imageCreationTime: z.coerce.date(),
   latitude,
   longitude,
