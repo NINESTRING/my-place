@@ -868,6 +868,11 @@ export function PlaceCard({ place }: { place: PlaceWithPublicId }) {
 import { PlaceCard } from "@/components/place-card"
 import { getAllPlaces } from "@/lib/places"
 
+// 장소 목록은 매 요청마다 최신 DB 상태를 반영해야 하므로 정적 프리렌더를 끈다.
+// Next는 Prisma 호출을 동적 신호로 인식하지 못하므로, 이 설정이 없으면 빌드
+// 시점에 이 페이지를 정적 생성하며 그 결과가 영구히 굳는다.
+export const dynamic = "force-dynamic"
+
 export default async function HomePage() {
   const places = await getAllPlaces()
 
@@ -940,7 +945,7 @@ export default function Error({
 }
 ```
 
-`app/not-found.tsx`:
+`app/not-found.tsx` — 이 저장소의 shadcn Button은 Radix가 아니라 `@base-ui/react`를 감싸므로 `asChild`가 없다. 합성은 `render` prop으로 한다:
 
 ```tsx
 import Link from "next/link"
@@ -950,9 +955,7 @@ export default function NotFound() {
   return (
     <main className="mx-auto flex max-w-2xl flex-col items-start gap-4 px-4 py-16">
       <h1 className="text-xl font-bold">페이지를 찾을 수 없습니다</h1>
-      <Button asChild>
-        <Link href="/">홈으로</Link>
-      </Button>
+      <Button render={<Link href="/">홈으로</Link>} />
     </main>
   )
 }
@@ -1280,6 +1283,9 @@ import { MapView } from "@/components/map-view"
 import { getPlacesInBounds } from "@/lib/places"
 import type { Bounds } from "@/schemas/place"
 
+// 홈과 같은 이유로 정적 프리렌더를 끈다.
+export const dynamic = "force-dynamic"
+
 const INITIAL_BOUNDS: Bounds = {
   sw: { latitude: 37, longitude: 126 },
   ne: { latitude: 38, longitude: 128 },
@@ -1420,7 +1426,9 @@ export async function createPlaceAction(
 }
 ```
 
-서명 발급이 서버 액션으로 옮겨져 `CLOUDINARY_SECRET`은 서버에만 머문다. `revalidatePath`는 저장 후 홈과 지도의 캐시를 무효화한다 — 옛 코드에는 이에 대응하는 동작이 없어 Apollo 캐시가 낡은 상태로 남았다.
+서명 발급이 서버 액션으로 옮겨져 `CLOUDINARY_SECRET`은 서버에만 머문다.
+
+`revalidatePath`는 홈과 지도가 `force-dynamic`이어도 여전히 필요하다. 서버는 매 요청 재렌더하지만 **클라이언트 Router Cache**는 RSC 페이로드를 잠시 보관하므로, 저장 직후 클라이언트 내비게이션으로 홈에 돌아가면 방금 만든 장소가 빠진 화면을 볼 수 있다. `revalidatePath`가 그 캐시까지 무효화한다. 옛 코드에는 이에 대응하는 동작이 없어 Apollo 캐시가 낡은 상태로 남았다.
 
 - [ ] **Step 2: StarRating 작성**
 
