@@ -69,7 +69,6 @@ export async function createPlaceAction(
       data: { ...parsed.data, userId },
     })
     revalidatePath("/")
-    revalidatePath("/map")
     return { ok: true, id: place.id }
   } catch {
     return { ok: false, error: "저장에 실패했습니다" }

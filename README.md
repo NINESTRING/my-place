@@ -8,12 +8,18 @@
 
 ## 주요 기능
 
-| 페이지 | 경로 | 설명 |
-| --- | --- | --- |
-| 홈 | `/` | 등록된 모든 장소를 shadcn `Card` 기반 사진 카드로 나열 |
-| 등록 | `/create` | 사진 업로드 → EXIF 파싱 → 지도에 촬영 위치 표시 → 설명/별점/카테고리 입력 후 저장 |
-| 지도 | `/map` | MapLibre 지도. 화면에 보이는 영역(bounds) 안의 장소만 조회해 마커로 표시, 마커 클릭 시 사진 팝업 |
+화면은 `/` 한 페이지뿐입니다. MapLibre 지도가 뷰포트를 가득 채우고, 지도를
+떠나지 않은 채로 등록과 목록을 오버레이로 처리합니다.
 
+| 요소 | 조작 | 설명 |
+| --- | --- | --- |
+| 지도 | — | 화면에 보이는 영역(bounds) 안의 장소만 조회해 마커로 표시, 마커 클릭 시 사진 팝업 |
+| 등록 | 오른쪽 위 `MapPinPlus` 아이콘 | 모달로 등록 폼을 띄운다. 사진 업로드 → EXIF 파싱 → 폼 안 지도에 촬영 위치 표시 → 설명/별점/카테고리 입력 후 저장. 저장하면 모달이 닫히고 지도가 그 좌표로 날아간다 |
+| 목록 | 오른쪽 위 `List` 아이콘 | 왼쪽에서 패널이 밀려 들어온다. **지도를 다 덮지 않으며**(`w-[min(22rem,82vw)]`) 열려 있는 동안에도 지도를 그대로 조작할 수 있다. 카드를 누르면 그 장소로 이동한다 |
+
+- **지도와 목록이 같은 조회를 공유** — 목록에 나오는 것은 "지금 지도에 보이는
+  장소"이며, 마커와 같은 `getPlacesInBounds` 결과입니다. 지도를 옮기면 목록도
+  따라 바뀝니다.
 - **EXIF 기반 자동 위치 인식** — `exifr`로 사진에서 위경도·촬영일시를 읽고, 정보가 없는 사진은 등록을 거부합니다.
 - **뷰포트 기반 조회** — 지도를 움직이면 현재 bounds를 디바운스(`use-debounce`) 후 `GET /api/places`로 재조회합니다. 지도 위치/영역은 localStorage에 저장되어 새로고침해도 유지됩니다.
 - **이미지 업로드** — 서버 액션(`createUploadUrlAction`)이 Supabase Storage 서명 업로드 URL을 발급하고, 브라우저가 그 URL로 직접 올립니다. 브라우저에 Supabase 키가 나가지 않습니다.
@@ -52,14 +58,24 @@
 ## 아키텍처
 
 ```text
-브라우저
- ├─ 홈 /            서버 컴포넌트 ──► Prisma ──► PostgreSQL
- ├─ 지도 /map       서버에서 초기 데이터 ──► 클라이언트 지도
- │                   팬/줌 ──► GET /api/places?swLat&swLng&neLat&neLng
- ├─ 등록 /create    폼 ──► 서버 액션 createPlaceAction ──► Prisma
+브라우저 — / 한 페이지
+ ├─ 서버 컴포넌트   초기 bounds 장소 ──► Prisma ──► PostgreSQL
+ ├─ PlaceExplorer   지도 + 조작 버튼 + 목록 패널 + 등록 모달 (클라이언트)
+ │   ├─ 팬/줌 ──► GET /api/places?swLat&swLng&neLat&neLng
+ │   ├─ 목록 패널   같은 조회 결과를 카드로 (클릭 ──► flyTo)
+ │   └─ 등록 모달   폼 ──► 서버 액션 createPlaceAction ──► Prisma
  │                       └─ createUploadUrlAction ──► Supabase Storage 직접 업로드
  └─ 이미지          next/image + Supabase Storage
 ```
+
+한 페이지로 합치면서 저장 후 이동할 페이지가 없어졌다. `PlaceForm`은
+`router.push` 대신 `onCreated(좌표)` 콜백을 부르고, `PlaceExplorer`가 모달을
+닫고 그 좌표로 `flyTo` 한다. 이때 장소 목록은 RSC가 아니라 `/api/places`로
+가져오므로 `router.refresh()`로는 갱신되지 않는다 — bounds가 그대로일 때도
+재조회가 걸리도록 `reloadToken`을 올린다.
+
+옛 `/map`·`/create` 경로는 `next.config.ts`의 `redirects()`가 `/`로 308
+리다이렉트한다.
 
 읽기는 서버 컴포넌트가 Prisma를 직접 호출한다. 지도의 bounds 재조회만
 Route Handler(GET)를 쓰는데, 서버 액션은 POST 전용이고 순차 실행되어
@@ -77,18 +93,17 @@ Route Handler(GET)를 쓰는데, 서버 액션은 POST 전용이고 순차 실�
 
 ```text
 app/
-  layout.tsx           루트 레이아웃 (Header)
-  globals.css          Tailwind 4 + shadcn 테마 (--header-height 단일 출처 포함)
-  page.tsx             홈 (force-dynamic)
-  map/page.tsx         지도 (force-dynamic)
-  create/page.tsx      등록
+  layout.tsx           루트 레이아웃 (전역 헤더 없음 — 지도가 화면을 채운다)
+  globals.css          Tailwind 4 + shadcn 테마
+  page.tsx             유일한 화면 (force-dynamic)
   api/places/route.ts  bounds 기반 장소 조회
   error.tsx  loading.tsx  not-found.tsx
 src/
   actions/     서버 액션 (createPlaceAction, createUploadUrlAction)
   schemas/     Zod 스키마 (폼·서버 액션 공용)
   lib/         prisma, places, images, supabase, auth, categories, utils(cn)
-  components/  Header, PlaceCard, MapView, PlaceForm, StarRating, CategoryPicker
+  components/  PlaceExplorer(화면 전체), PlaceListPanel, CreatePlaceDialog,
+               PlaceCard, PlaceForm, StarRating, CategoryPicker
   components/ui/  shadcn 생성물 (Field 기반 폼 프리미티브 포함, form.tsx 없음)
   hooks/       useLocalState, useLastData
   assets/      Lottie 애니메이션 JSON
@@ -146,8 +161,11 @@ npm run test:watch  # Vitest 단위 테스트(watch 모드)
   URL의 경로와 `createPlaceAction`에 제출된 경로가 바인딩되지 않아, 인증이
   붙는 순간 다른 사용자의 이미지를 자기 행에 붙일 수 있게 됩니다. 자세한
   내용은 `src/actions/place.ts` 상단 주석에 있습니다.
-- 홈 카드가 shadcn Card 기반으로 재구성되면서, 이전의 티켓 절취선 디자인은
+- 장소 카드가 shadcn Card 기반으로 재구성되면서, 이전의 티켓 절취선 디자인은
   더 이상 재현하지 않습니다.
+- 목록 패널은 지도를 가리지 않는 것이 목적이라 백드롭도 포커스 트랩도 없는
+  일반 `<aside>`입니다. 닫힘 상태에서는 화면 밖으로 밀려나 있을 뿐 DOM에
+  남으므로 `inert`로 탭 순서에서 제외합니다. 스와이프로 닫는 제스처는 없습니다.
 - 테스트는 Zod 스키마와 순수 함수에 대한 Vitest 단위 테스트만 있습니다.
   컴포넌트 테스트와 E2E 테스트는 없습니다.
 - `place(id)` 단건 조회, 반경 10km `nearby` 조회, 장소 삭제 기능은 이전

@@ -13,6 +13,13 @@ if (!supabaseUrl) {
 const normalizedSupabaseUrl = supabaseUrl.replace(/\/+$/, "")
 
 const nextConfig: NextConfig = {
+  // 지도·등록·목록이 홈 한 페이지로 합쳐졌다. 옛 경로 북마크를 살려 둔다.
+  async redirects() {
+    return [
+      { source: "/map", destination: "/", permanent: true },
+      { source: "/create", destination: "/", permanent: true },
+    ]
+  },
   images: {
     remotePatterns: [
       {

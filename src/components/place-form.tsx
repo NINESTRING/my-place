@@ -4,8 +4,10 @@ import "maplibre-gl/dist/maplibre-gl.css"
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import exifr from "exifr"
+// 타입만 쓴다. 값 import 는 아래 effect 의 동적 import 가 담당한다
+// (lottie-web 은 모듈 평가 시점에 document 를 만진다).
+import type { AnimationItem } from "lottie-web"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type ChangeEvent } from "react"
 import { Controller, useForm } from "react-hook-form"
 import Map, { Marker, type MapRef } from "react-map-gl/maplibre"
@@ -47,8 +49,16 @@ async function uploadToStorage(file: File, signedUrl: string): Promise<void> {
   }
 }
 
-export function PlaceForm() {
-  const router = useRouter()
+/**
+ * 저장에 성공하면 `onCreated` 로 촬영 좌표를 넘긴다. 이 폼은 지도 위 모달에
+ * 떠 있으므로 저장 후 페이지를 옮기지 않는다. 대신 부모가 모달을 닫고 그
+ * 좌표로 지도를 이동시킨다.
+ */
+export function PlaceForm({
+  onCreated,
+}: {
+  onCreated: (place: { latitude: number; longitude: number }) => void
+}) {
   const lottieRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapRef>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -66,9 +76,10 @@ export function PlaceForm() {
   })
 
   // lottie-web 은 import 시점에 document 에 접근하므로 브라우저에서만 불러온다.
-  // 옛 코드는 최상위 정적 import 를 해서 /create 의 SSR 이 깨졌다.
+  // 옛 코드는 최상위 정적 import 를 해서 이 폼을 담은 페이지의 SSR 이 깨졌다.
   useEffect(() => {
-    let destroy: (() => void) | undefined
+    let animation: AnimationItem | undefined
+    let cancelled = false
 
     void (async () => {
       if (!lottieRef.current) return
@@ -77,17 +88,27 @@ export function PlaceForm() {
           import("lottie-web"),
           import("@/assets/photo-upload.json"),
         ])
-      const animation = lottie.loadAnimation({
+
+      // cancelled 검사가 필요한 이유: Strict Mode(개발 모드)에서 이 effect 는
+      // 마운트-언마운트-재마운트로 두 번 돈다. 위 동적 import 가 끝나기 전에
+      // 첫 cleanup 이 실행되면 그 시점에는 아직 지울 애니메이션이 없어서,
+      // 뒤늦게 만들어진 첫 애니메이션이 컨테이너에 그대로 남고 두 번째
+      // 애니메이션이 그 아래에 덧붙는다 — SVG 두 개가 세로로 겹쳐 보인다.
+      if (cancelled || !lottieRef.current) return
+
+      animation = lottie.loadAnimation({
         container: lottieRef.current,
         renderer: "svg",
         loop: false,
         autoplay: true,
         animationData,
       })
-      destroy = () => animation.destroy()
     })()
 
-    return () => destroy?.()
+    return () => {
+      cancelled = true
+      animation?.destroy()
+    }
   }, [])
 
   const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -170,12 +191,12 @@ export function PlaceForm() {
         return
       }
 
-      // 성공 경로에서는 submitting 을 다시 풀지 않는다. router.push 는
-      // await 하지 않으므로 클라이언트 내비게이션이 진행되는 동안 버튼을
+      // 성공 경로에서는 submitting 을 다시 풀지 않는다. 부모가 모달을 닫으면
+      // 이 폼은 언마운트되므로 되돌릴 필요가 없고, 그 사이에 버튼을
       // 재활성화하면 빠른 재클릭이 createPlaceAction 을 한 번 더 실행해
-      // 중복 Place 를 만들 수 있다. 페이지가 교체될 때까지 비활성 상태를 유지한다.
+      // 중복 Place 를 만들 수 있다.
       toast.success("장소를 저장했습니다.")
-      router.push("/map")
+      onCreated({ latitude: exif.latitude, longitude: exif.longitude })
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "저장 중 문제가 발생했습니다."
@@ -185,10 +206,7 @@ export function PlaceForm() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit(onSubmit)}
-      className="mx-auto max-w-xl space-y-6 px-4 py-10"
-    >
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div>
         <label
           htmlFor="photo"

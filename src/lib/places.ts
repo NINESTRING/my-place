@@ -29,13 +29,10 @@ export function revivePlace(place: SerializedPlace): Place {
   }
 }
 
-export async function getAllPlaces(): Promise<Place[]> {
-  return prisma.place.findMany({
-    take: MAX_PLACES,
-    orderBy: { imageCreationTime: "desc" },
-  })
-}
-
+/**
+ * 지도에 보이는 영역의 장소. 마커와 목록 패널이 이 한 번의 조회를 함께
+ * 쓰므로, 목록에 그대로 쓸 수 있도록 최신 촬영 순으로 정렬해 돌려준다.
+ */
 export async function getPlacesInBounds(bounds: Bounds): Promise<Place[]> {
   return prisma.place.findMany({
     where: {
@@ -43,5 +40,6 @@ export async function getPlacesInBounds(bounds: Bounds): Promise<Place[]> {
       longitude: { gte: bounds.sw.longitude, lte: bounds.ne.longitude },
     },
     take: MAX_PLACES,
+    orderBy: { imageCreationTime: "desc" },
   })
 }

@@ -1,14 +1,14 @@
 import { Skeleton } from "@/components/ui/skeleton"
 
+// 한 화면짜리 지도 앱이므로 로딩 자리도 지도 모양으로 잡는다.
 export default function Loading() {
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <Skeleton className="mb-6 h-8 w-40" />
-      <div className="space-y-4">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-64 w-full" />
-        ))}
+    <div className="relative h-dvh w-full overflow-hidden">
+      <Skeleton className="h-full w-full rounded-none" />
+      <div className="absolute top-4 right-4 flex flex-col gap-2">
+        <Skeleton className="size-11 rounded-full" />
+        <Skeleton className="size-11 rounded-full" />
       </div>
-    </main>
+    </div>
   )
 }
