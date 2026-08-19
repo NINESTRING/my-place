@@ -10,60 +10,63 @@
 
 | 페이지 | 경로 | 설명 |
 | --- | --- | --- |
-| 홈 | `/` | 등록된 모든 장소를 사진 카드 형태(티켓 모양 디자인)로 나열 |
+| 홈 | `/` | 등록된 모든 장소를 shadcn `Card` 기반 사진 카드로 나열 |
 | 등록 | `/create` | 사진 업로드 → EXIF 파싱 → 지도 자동 이동 → 설명/별점/카테고리 입력 후 저장 |
 | 지도 | `/map` | Mapbox 지도. 화면에 보이는 영역(bounds) 안의 장소만 조회해 마커로 표시, 마커 클릭 시 사진 팝업 |
 
 - **EXIF 기반 자동 위치 인식** — `exifr`로 사진에서 위경도·촬영일시를 읽고, 정보가 없는 사진은 등록을 거부합니다.
-- **뷰포트 기반 조회** — 지도를 움직이면 현재 bounds를 1초 디바운스 후 GraphQL로 질의합니다. 지도 위치/영역은 localStorage에 저장되어 새로고침해도 유지됩니다.
-- **주변 장소 조회** — `Place.nearby` 필드에서 `geolib`로 반경 10km 범위를 계산해 인접 장소를 반환합니다.
-- **이미지 CDN 업로드** — 서버에서 Cloudinary 업로드 서명을 발급받아 브라우저가 직접 Cloudinary로 업로드합니다(시크릿 노출 없음).
-- **별점 / 카테고리 선택** — 커스텀 SVG 컴포넌트(별 5단계, 카테고리 4종)로 입력합니다.
-- **페이지 전환 애니메이션 · Lottie** — `react-transition-group` 기반 전환 효과와 업로드 영역의 Lottie 애니메이션.
+- **뷰포트 기반 조회** — 지도를 움직이면 현재 bounds를 디바운스(`use-debounce`) 후 `GET /api/places`로 재조회합니다. 지도 위치/영역은 localStorage에 저장되어 새로고침해도 유지됩니다.
+- **이미지 CDN 업로드** — 서버 액션(`createUploadSignature`)이 Cloudinary 업로드 서명을 발급하고, 브라우저가 그 서명으로 Cloudinary에 직접 업로드합니다(시크릿 노출 없음).
+- **별점 / 카테고리 선택** — 커스텀 별점 컴포넌트와 shadcn `ToggleGroup` 기반 카테고리 선택.
+- **업로드 영역 Lottie 애니메이션** — 페이지 전환 애니메이션은 없습니다(아래 기술 스택의 안내 참고).
 
 ## 기술 스택
 
-- **프레임워크**: Next.js 12 (Pages Router), React 18, TypeScript
-- **스타일**: styled-components (SSR 컴파일러 옵션 활성화), 전역 스타일 + 테마
-- **API**: GraphQL — `apollo-server-micro` + `type-graphql` (코드 퍼스트, 데코레이터 기반)를 `/api/graphql` 단일 라우트에서 서빙
-- **클라이언트 데이터**: Apollo Client (`cache-and-network`)
-- **DB / ORM**: PostgreSQL + Prisma
-- **지도**: Mapbox GL (`react-map-gl`)
-- **이미지**: Cloudinary (`next.config.js`의 image loader로 지정)
-- **인증**: Firebase Auth (클라이언트) + httpOnly 쿠키 (`/api/login`, `/api/logout`)
-- **기타**: react-hook-form, exifr, geolib, lottie-web, use-debounce
+- **프레임워크**: Next.js 16 (App Router), React 19, TypeScript
+- **스타일**: Tailwind CSS 4 + shadcn/ui (`shadcn`은 devDependency이며,
+  `app/globals.css`가 `shadcn/tailwind.css`를 import해 생성된 컴포넌트가
+  쓰는 커스텀 variant를 공급받는다)
+- **데이터**: 서버 컴포넌트가 Prisma를 직접 호출. 쓰기는 서버 액션,
+  지도 bounds 재조회는 Route Handler(GET)
+- **검증**: Zod (클라이언트 폼과 서버 액션이 스키마 공유)
+- **DB / ORM**: PostgreSQL + Prisma 6
+- **지도**: Mapbox GL 3 (`react-map-gl` 8)
+- **이미지**: Cloudinary (next/image 커스텀 로더)
+- **인증**: Firebase Auth 클라이언트 코드만 존재 — 미구현 (아래 참고)
+- **테스트**: Vitest
+- **기타**: react-hook-form, exifr, lottie-web, use-debounce
+
+> **페이지 전환 애니메이션은 없습니다.** 초기 계획은 View Transitions 기반
+> 크로스페이드였지만 구현 시점 기준 `react@19.2.8`는 `ViewTransition`을
+> export하지 않고, `next@16.3.1`에도 그 실험적 React 기능에 접근할
+> `experimental.viewTransition` 설정이 없어 채택할 수 없었습니다. CSS만으로
+> `::view-transition-*`를 정의해도 App Router의 동일 문서 내 네비게이션은 애초에
+> 전환을 시작시키지 않으므로 아무 효과가 없는 죽은 코드가 됩니다. 따라서
+> 전환 없이 출시하기로 결정했습니다.
+
+> shadcn 스타일은 `base-nova`이며 primitives가 Radix가 아니라 `@base-ui/react`
+> 입니다. 그 결과 `Button`은 `asChild` 대신 `render` prop을 쓰고,
+> `ToggleGroup`은 배열 값을 받으며 `type` prop이 없습니다.
 
 ## 아키텍처
 
-```
+```text
 브라우저
- ├─ Apollo Client ──► /api/graphql (apollo-server-micro)
- │                      └─ type-graphql 스키마 ──► Prisma ──► PostgreSQL
- ├─ Firebase Auth ──► /api/login  (ID 토큰을 httpOnly 쿠키로 저장)
- └─ 직접 업로드 ────► Cloudinary  (서버가 발급한 서명 사용)
+ ├─ 홈 /            서버 컴포넌트 ──► Prisma ──► PostgreSQL
+ ├─ 지도 /map       서버에서 초기 데이터 ──► 클라이언트 지도
+ │                   팬/줌 ──► GET /api/places?swLat&swLng&neLat&neLng
+ ├─ 등록 /create    폼 ──► 서버 액션 createPlaceAction ──► Prisma
+ │                       └─ createUploadSignature ──► Cloudinary 직접 업로드
+ └─ 이미지          next/image + Cloudinary 커스텀 로더
 ```
 
-GraphQL 스키마는 `type-graphql`이 개발 모드에서 자동 생성하며(`schema.gql`), Apollo CLI(`npm run codegen`)로 클라이언트 타입을 `src/generated`에 생성할 수 있습니다. **`schema.gql`은 생성 파일이므로 직접 수정하지 마세요.**
+읽기는 서버 컴포넌트가 Prisma를 직접 호출한다. 지도의 bounds 재조회만
+Route Handler(GET)를 쓰는데, 서버 액션은 POST 전용이고 순차 실행되어
+팬/줌마다 호출하기에 맞지 않기 때문이다. 쓰기는 서버 액션이 담당하며
+`CLOUDINARY_SECRET`은 서버에만 머문다.
 
-### GraphQL API
-
-```graphql
-type Query {
-  hello: String!
-  place(id: String!): Place
-  places(bounds: BoundsInput!): [Place!]!   # 지도 영역 내 조회 (최대 50건)
-  allPlaces: [Place!]!                       # 전체 조회 (최대 50건)
-}
-
-type Mutation {
-  createImageSignature: ImageSignature!      # Cloudinary 업로드 서명 (인증 필요)
-  createPlace(input: PlaceInput!): Place     # 인증 필요
-  updatePlace(id: String!, input: PlaceInput!): Place  # 인증 + 소유자 확인
-  deletePlace(id: String!): Boolean!         # 인증 + 소유자 확인
-}
-```
-
-`Place.publicId`는 Cloudinary URL의 마지막 세그먼트를 잘라 반환하는 계산 필드로, `next/image`의 Cloudinary 로더에 그대로 넘겨 사용합니다.
+`src/schemas/place.ts`의 Zod 스키마 하나를 클라이언트 폼 검증과 서버 액션
+검증이 공유한다.
 
 ### 데이터 모델
 
@@ -71,34 +74,32 @@ type Mutation {
 
 ## 디렉터리 구조
 
-```
-pages/
-  index.tsx        홈 (전체 장소 목록)
-  create.tsx       장소 등록 (사진 업로드 · EXIF · 지도 · 폼)
-  map.tsx          지도 탐색
-  api/
-    graphql.ts     Apollo Server 엔드포인트
-    login.ts       토큰을 httpOnly 쿠키로 설정
-    logout.ts      쿠키 제거
+```text
+app/
+  layout.tsx           루트 레이아웃 (Header)
+  globals.css          Tailwind 4 + shadcn 테마 (--header-height 단일 출처 포함)
+  page.tsx             홈 (force-dynamic)
+  map/page.tsx         지도 (force-dynamic)
+  create/page.tsx      등록
+  api/places/route.ts  bounds 기반 장소 조회
+  error.tsx  loading.tsx  not-found.tsx
 src/
-  schema/          type-graphql 리졸버(place, image), 스키마 빌드, 인증 체커, 컨텍스트
-                   schema.ts 는 클라이언트용 gql 쿼리/뮤테이션 모음
-  auth/            Firebase 초기화, useAuth 컨텍스트, 토큰 쿠키 헬퍼
-  components/      header, category, starRating, spiner, pageTransitions
-  utils/           useLocalState(localStorage 동기화), useLastData(직전 데이터 유지)
-  styles/          globalstyles, sharedstyles
-  assets/          Lottie 애니메이션 JSON
-  apollo.ts        Apollo Client 생성
-  prisma.ts        PrismaClient 인스턴스
+  actions/     서버 액션 (createPlaceAction, createUploadSignature)
+  schemas/     Zod 스키마 (폼·서버 액션 공용)
+  lib/         prisma, places, auth, categories, cloudinary-loader, utils(cn)
+  components/  Header, PlaceCard, MapView, PlaceForm, StarRating, CategoryPicker
+  components/ui/  shadcn 생성물 (Field 기반 폼 프리미티브 포함, form.tsx 없음)
+  hooks/       useLocalState, useLastData
+  auth/        Firebase 클라이언트 코드 (미구현 상태로 보존)
+  assets/      Lottie 애니메이션 JSON
 prisma/schema.prisma
-schema.gql         (자동 생성)
 ```
 
 ## 시작하기
 
 ### 요구 사항
 
-- Node.js 16+
+- Node.js 20+
 - PostgreSQL 데이터베이스
 - Mapbox / Cloudinary / Firebase 계정
 
@@ -131,26 +132,26 @@ npx prisma db push     # 스키마를 DB에 반영
 npm run dev            # http://localhost:3000
 ```
 
-> 이 프로젝트는 **npm**을 사용합니다(`package-lock.json`). CI 등 재현 가능한 설치가 필요하면 `npm ci`를 쓰세요.
->
-> `@reach/combobox@0.18.0`이 React 16/17만 peer로 허용해 React 18과 충돌하기 때문에, 루트의 `.npmrc`에 `legacy-peer-deps=true`를 설정해 두었습니다. 해당 패키지는 현재 코드에서 사용되지 않으므로, 제거하면 `.npmrc`도 함께 지울 수 있습니다.
-
 ### 그 외 스크립트
 
 ```bash
 npm run build     # 프로덕션 빌드
 npm start         # 프로덕션 서버 실행
-npm run codegen   # schema.gql 기준으로 클라이언트 타입 생성 → src/generated
+npm test          # Vitest 단위 테스트
 ```
 
 ## 미완성 / 알려진 이슈
 
-현재 코드 기준으로 마무리가 필요한 부분입니다.
-
-- **서버 인증이 비활성화되어 있습니다.** `pages/api/graphql.ts`에서 Firebase Admin으로 ID 토큰을 검증하는 부분이 주석 처리되어 있고 `uid`가 `"1"`로 하드코딩되어 있습니다. 참조하던 `src/auth/firebaseAdmin` 파일도 저장소에 없습니다. 즉 모든 요청이 동일 사용자로 인증된 것처럼 처리되므로, 배포 전 반드시 복구해야 합니다.
-- **로그인이 하드코딩되어 있습니다.** `src/auth/useAuth.tsx`의 `login()`이 고정된 이메일/비밀번호로 로그인합니다. 로그인 폼과 회원가입 플로우가 필요합니다.
-- **로그인 성공 시 `/api/login`을 호출해 토큰 쿠키를 심는 연결**이 아직 없습니다(`tokenCookies` 헬퍼는 준비되어 있음).
-- 홈 카드의 티켓 절취선용 `<li>` 반복 마크업 등 정리할 마크업이 남아 있습니다.
-- `use-places-autocomplete`, `react-google-autocomplete`, `@reach/combobox` 등 주소 검색 관련 의존성이 설치되어 있으나 아직 사용되지 않습니다.
-- **`/create` 페이지가 서버에서 렌더링되지 않습니다.** `lottie-web`이 import 시점에 `document`에 접근하는데 `pages/create.tsx`에서 최상위 정적 import를 하고 있어, dev에서는 500, `npm run build`는 "Failed to collect page data for /create"로 실패합니다. `next/dynamic`의 `ssr: false`로 불러오거나 `useEffect` 안에서 동적 import 하면 해결됩니다.
-- 테스트 코드가 없습니다.
+- **인증이 구현되어 있지 않습니다.** 모든 쓰기 경로는
+  `src/lib/auth.ts`의 `getCurrentUserId()`를 통과하며, 이 함수는 고정값
+  `"1"`을 반환합니다. 인증을 붙일 때 이 함수 하나만 실제 구현으로 바꾸면
+  됩니다. 클라이언트 Firebase 코드(`src/auth/`)는 남아 있으나 로그인 폼과
+  세션 검증이 없고, `tokenCookies.ts`가 요청하는 `/api/login`·`/api/logout`
+  라우트는 존재하지 않습니다.
+- 홈 카드가 shadcn Card 기반으로 재구성되면서, 이전의 티켓 절취선 디자인은
+  더 이상 재현하지 않습니다.
+- 테스트는 Zod 스키마와 순수 함수에 대한 Vitest 단위 테스트만 있습니다.
+  컴포넌트 테스트와 E2E 테스트는 없습니다.
+- `place(id)` 단건 조회, 반경 10km `nearby` 조회, 장소 삭제 기능은 이전
+  GraphQL 스키마에 정의되어 있었으나 호출하는 화면이 없어 이전 대상에서
+  제외했습니다.
