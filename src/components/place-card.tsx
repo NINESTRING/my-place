@@ -1,9 +1,11 @@
+import type { Place } from "@prisma/client"
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { categoryLabel } from "@/lib/categories"
-import { clampRating, type PlaceWithPublicId } from "@/lib/places"
+import { publicImageUrl } from "@/lib/images"
+import { clampRating } from "@/lib/places"
 
-export function PlaceCard({ place }: { place: PlaceWithPublicId }) {
+export function PlaceCard({ place }: { place: Place }) {
   const takenAt = new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
     month: "long",
@@ -16,7 +18,7 @@ export function PlaceCard({ place }: { place: PlaceWithPublicId }) {
     <Card className="overflow-hidden p-0">
       <div className="relative aspect-[16/9] w-full">
         <Image
-          src={place.publicId}
+          src={publicImageUrl(place.image)}
           alt={place.description}
           fill
           sizes="(max-width: 640px) 100vw, 640px"

@@ -1,6 +1,6 @@
 "use client"
 
-import "mapbox-gl/dist/mapbox-gl.css"
+import "maplibre-gl/dist/maplibre-gl.css"
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import exifr from "exifr"
@@ -8,14 +8,15 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type ChangeEvent } from "react"
 import { Controller, useForm } from "react-hook-form"
-import Map, { Marker, type MapRef } from "react-map-gl/mapbox"
+import Map, { Marker, type MapRef } from "react-map-gl/maplibre"
 import { toast } from "sonner"
 import { CategoryPicker } from "@/components/category-picker"
 import { StarRating } from "@/components/star-rating"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
-import { createPlaceAction, createUploadSignature } from "@/actions/place"
+import { createPlaceAction, createUploadUrlAction } from "@/actions/place"
+import { MAX_UPLOAD_BYTES } from "@/lib/images"
 import { placeFormSchema, type PlaceFormValues } from "@/schemas/place"
 
 type ExifData = {
@@ -24,27 +25,26 @@ type ExifData = {
   createDate: Date
 }
 
-async function uploadToCloudinary(
-  file: File,
-  signature: string,
-  timestamp: number
-): Promise<string> {
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
-  const formData = new FormData()
-  formData.append("file", file)
-  formData.append("signature", signature)
-  formData.append("timestamp", String(timestamp))
-  formData.append("api_key", process.env.NEXT_PUBLIC_CLOUDINARY_KEY ?? "")
-
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
-    { method: "POST", body: formData }
-  )
-  if (!res.ok) throw new Error("이미지 업로드에 실패했습니다")
-
-  const json = (await res.json()) as { secure_url?: string }
-  if (!json.secure_url) throw new Error("이미지 업로드 응답이 올바르지 않습니다")
-  return json.secure_url
+/**
+ * 서버가 발급한 서명 URL 로 파일을 직접 올린다. supabase-js 를 클라이언트
+ * 번들에 넣지 않기 위해 raw fetch 를 쓴다.
+ */
+async function uploadToStorage(file: File, signedUrl: string): Promise<void> {
+  const res = await fetch(signedUrl, {
+    method: "PUT",
+    headers: {
+      "content-type": file.type,
+      // 파일명이 uuid 라 덮어쓰기·재사용이 없다. 무효화를 걱정할 필요가
+      // 없으므로 1년 캐시로 이미지 최적화 재요청 비용을 줄인다.
+      "cache-control": "public, max-age=31536000, immutable",
+    },
+    body: file,
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    console.error("Storage 업로드 실패", res.status, body)
+    throw new Error(`이미지 업로드에 실패했습니다 (${res.status})`)
+  }
 }
 
 export function PlaceForm() {
@@ -94,6 +94,14 @@ export function PlaceForm() {
     const selected = event.target.files?.[0]
     if (!selected) return
 
+    // 버킷의 file_size_limit(10MB)을 넘는 파일은 EXIF 파싱과 서명 URL
+    // 발급을 거칠 필요 없이 여기서 바로 거부한다.
+    if (selected.size > MAX_UPLOAD_BYTES) {
+      toast.error("사진 용량이 너무 큽니다. 10MB 이하 사진을 선택해 주세요.")
+      event.target.value = ""
+      return
+    }
+
     try {
       const parsed = await exifr.parse(selected)
       if (parsed?.latitude == null || parsed?.longitude == null) {
@@ -137,22 +145,18 @@ export function PlaceForm() {
 
     setSubmitting(true)
     try {
-      const signatureResult = await createUploadSignature()
-      if (!signatureResult.ok) {
-        toast.error(signatureResult.error)
+      const uploadUrl = await createUploadUrlAction(file.type)
+      if (!uploadUrl.ok) {
+        toast.error(uploadUrl.error)
         setSubmitting(false)
         return
       }
 
-      const imageUrl = await uploadToCloudinary(
-        file,
-        signatureResult.signature,
-        signatureResult.timestamp
-      )
+      await uploadToStorage(file, uploadUrl.signedUrl)
 
       const result = await createPlaceAction({
         description: values.description,
-        image: imageUrl,
+        image: uploadUrl.path,
         imageCreationTime: exif.createDate,
         latitude: exif.latitude,
         longitude: exif.longitude,
@@ -205,7 +209,7 @@ export function PlaceForm() {
         <input
           id="photo"
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           className="sr-only"
           onChange={onFileChange}
         />
@@ -225,8 +229,7 @@ export function PlaceForm() {
               latitude: exif.latitude,
               zoom: 13,
             }}
-            mapStyle="mapbox://styles/mapbox/streets-v12"
-            mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_API_TOKEN}
+            mapStyle="https://tiles.openfreemap.org/styles/liberty"
             style={{ width: "100%", height: "100%" }}
           >
             <Marker
