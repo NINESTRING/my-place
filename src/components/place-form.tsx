@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
 import { createPlaceAction, createUploadUrlAction } from "@/actions/place"
+import { MAX_UPLOAD_BYTES } from "@/lib/images"
 import { placeFormSchema, type PlaceFormValues } from "@/schemas/place"
 
 type ExifData = {
@@ -31,10 +32,19 @@ type ExifData = {
 async function uploadToStorage(file: File, signedUrl: string): Promise<void> {
   const res = await fetch(signedUrl, {
     method: "PUT",
-    headers: { "content-type": file.type },
+    headers: {
+      "content-type": file.type,
+      // 파일명이 uuid 라 덮어쓰기·재사용이 없다. 무효화를 걱정할 필요가
+      // 없으므로 1년 캐시로 이미지 최적화 재요청 비용을 줄인다.
+      "cache-control": "public, max-age=31536000, immutable",
+    },
     body: file,
   })
-  if (!res.ok) throw new Error("이미지 업로드에 실패했습니다")
+  if (!res.ok) {
+    const body = await res.text()
+    console.error("Storage 업로드 실패", res.status, body)
+    throw new Error(`이미지 업로드에 실패했습니다 (${res.status})`)
+  }
 }
 
 export function PlaceForm() {
@@ -83,6 +93,14 @@ export function PlaceForm() {
   const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0]
     if (!selected) return
+
+    // 버킷의 file_size_limit(10MB)을 넘는 파일은 EXIF 파싱과 서명 URL
+    // 발급을 거칠 필요 없이 여기서 바로 거부한다.
+    if (selected.size > MAX_UPLOAD_BYTES) {
+      toast.error("사진 용량이 너무 큽니다. 10MB 이하 사진을 선택해 주세요.")
+      event.target.value = ""
+      return
+    }
 
     try {
       const parsed = await exifr.parse(selected)

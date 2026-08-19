@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { publicImageUrl } from "@/lib/images"
+import { publicImageUrl, storageExtension } from "@/lib/images"
 
 const SUPABASE_URL = "https://xhttvfbzqhprmentinxm.supabase.co"
 
@@ -21,5 +21,46 @@ describe("publicImageUrl", () => {
     expect(publicImageUrl(path)).toBe(
       `${SUPABASE_URL}/storage/v1/object/public/places/${path}`
     )
+  })
+
+  it("환경 변수에 후행 슬래시가 붙어도 이중 슬래시 없이 만든다", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", `${SUPABASE_URL}/`)
+    expect(publicImageUrl("abc.jpg")).toBe(
+      `${SUPABASE_URL}/storage/v1/object/public/places/abc.jpg`
+    )
+  })
+})
+
+describe("storageExtension", () => {
+  it("image/jpeg 를 jpg 로 바꾼다", () => {
+    expect(storageExtension("image/jpeg")).toBe("jpg")
+  })
+
+  it("image/png 를 png 로 바꾼다", () => {
+    expect(storageExtension("image/png")).toBe("png")
+  })
+
+  it("image/webp 를 webp 로 바꾼다", () => {
+    expect(storageExtension("image/webp")).toBe("webp")
+  })
+
+  it("허용 목록에 없는 MIME 타입은 null 이다", () => {
+    expect(storageExtension("image/heic")).toBeNull()
+  })
+
+  it("프로토타입 체인의 constructor 는 null 이다", () => {
+    expect(storageExtension("constructor")).toBeNull()
+  })
+
+  it("프로토타입 체인의 __proto__ 는 null 이다", () => {
+    expect(storageExtension("__proto__")).toBeNull()
+  })
+
+  it("프로토타입 체인의 toString 은 null 이다", () => {
+    expect(storageExtension("toString")).toBeNull()
+  })
+
+  it("빈 문자열은 null 이다", () => {
+    expect(storageExtension("")).toBeNull()
   })
 })
