@@ -1,12 +1,7 @@
 declare namespace NodeJS {
   interface ProcessEnv {
     DATABASE_URL: string
-    NEXT_PUBLIC_MAPBOX_API_TOKEN: string
-    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: string
-    NEXT_PUBLIC_CLOUDINARY_KEY: string
-    CLOUDINARY_SECRET: string
-    NEXT_PUBLIC_FIREBASE_API_KEY: string
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: string
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID: string
+    NEXT_PUBLIC_SUPABASE_URL: string
+    SUPABASE_SECRET_KEY: string
   }
 }

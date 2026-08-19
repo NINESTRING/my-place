@@ -12,11 +12,11 @@
 | --- | --- | --- |
 | 홈 | `/` | 등록된 모든 장소를 shadcn `Card` 기반 사진 카드로 나열 |
 | 등록 | `/create` | 사진 업로드 → EXIF 파싱 → 지도에 촬영 위치 표시 → 설명/별점/카테고리 입력 후 저장 |
-| 지도 | `/map` | Mapbox 지도. 화면에 보이는 영역(bounds) 안의 장소만 조회해 마커로 표시, 마커 클릭 시 사진 팝업 |
+| 지도 | `/map` | MapLibre 지도. 화면에 보이는 영역(bounds) 안의 장소만 조회해 마커로 표시, 마커 클릭 시 사진 팝업 |
 
 - **EXIF 기반 자동 위치 인식** — `exifr`로 사진에서 위경도·촬영일시를 읽고, 정보가 없는 사진은 등록을 거부합니다.
 - **뷰포트 기반 조회** — 지도를 움직이면 현재 bounds를 디바운스(`use-debounce`) 후 `GET /api/places`로 재조회합니다. 지도 위치/영역은 localStorage에 저장되어 새로고침해도 유지됩니다.
-- **이미지 CDN 업로드** — 서버 액션(`createUploadSignature`)이 Cloudinary 업로드 서명을 발급하고, 브라우저가 그 서명으로 Cloudinary에 직접 업로드합니다(시크릿 노출 없음).
+- **이미지 업로드** — 서버 액션(`createUploadUrlAction`)이 Supabase Storage 서명 업로드 URL을 발급하고, 브라우저가 그 URL로 직접 올립니다. 브라우저에 Supabase 키가 나가지 않습니다.
 - **별점 / 카테고리 선택** — 커스텀 별점 컴포넌트와 shadcn `ToggleGroup` 기반 카테고리 선택.
 - **업로드 영역 Lottie 애니메이션** — 페이지 전환 애니메이션은 없습니다(아래 기술 스택의 안내 참고).
 
@@ -29,10 +29,10 @@
 - **데이터**: 서버 컴포넌트가 Prisma를 직접 호출. 쓰기는 서버 액션,
   지도 bounds 재조회는 Route Handler(GET)
 - **검증**: Zod (클라이언트 폼과 서버 액션이 스키마 공유)
-- **DB / ORM**: PostgreSQL + Prisma 6
-- **지도**: Mapbox GL 3 (`react-map-gl` 8)
-- **이미지**: Cloudinary (next/image 커스텀 로더)
-- **인증**: Firebase Auth 클라이언트 코드만 존재 — 미구현 (아래 참고)
+- **DB / ORM**: PostgreSQL (Supabase) + Prisma 6
+- **지도**: MapLibre GL (`react-map-gl` 8) + OpenFreeMap 타일
+- **이미지**: Supabase Storage (public 버킷) + next/image 내장 최적화
+- **인증**: 미구현. 벤더는 Supabase Auth로 확정했습니다. `src/lib/auth.ts`의 `getCurrentUserId()`가 고정값 `"1"`을 반환하는 스텁입니다.
 - **테스트**: Vitest
 - **기타**: react-hook-form, exifr, lottie-web, use-debounce
 
@@ -56,14 +56,14 @@
  ├─ 지도 /map       서버에서 초기 데이터 ──► 클라이언트 지도
  │                   팬/줌 ──► GET /api/places?swLat&swLng&neLat&neLng
  ├─ 등록 /create    폼 ──► 서버 액션 createPlaceAction ──► Prisma
- │                       └─ createUploadSignature ──► Cloudinary 직접 업로드
- └─ 이미지          next/image + Cloudinary 커스텀 로더
+ │                       └─ createUploadUrlAction ──► Supabase Storage 직접 업로드
+ └─ 이미지          next/image + Supabase Storage
 ```
 
 읽기는 서버 컴포넌트가 Prisma를 직접 호출한다. 지도의 bounds 재조회만
 Route Handler(GET)를 쓰는데, 서버 액션은 POST 전용이고 순차 실행되어
 팬/줌마다 호출하기에 맞지 않기 때문이다. 쓰기는 서버 액션이 담당하며
-`CLOUDINARY_SECRET`은 서버에만 머문다.
+`SUPABASE_SECRET_KEY`는 서버에만 머문다.
 
 `src/schemas/place.ts`의 Zod 스키마 하나를 클라이언트 폼 검증과 서버 액션
 검증이 공유한다.
@@ -84,13 +84,12 @@ app/
   api/places/route.ts  bounds 기반 장소 조회
   error.tsx  loading.tsx  not-found.tsx
 src/
-  actions/     서버 액션 (createPlaceAction, createUploadSignature)
+  actions/     서버 액션 (createPlaceAction, createUploadUrlAction)
   schemas/     Zod 스키마 (폼·서버 액션 공용)
-  lib/         prisma, places, auth, categories, cloudinary-loader, utils(cn)
+  lib/         prisma, places, images, supabase, auth, categories, utils(cn)
   components/  Header, PlaceCard, MapView, PlaceForm, StarRating, CategoryPicker
   components/ui/  shadcn 생성물 (Field 기반 폼 프리미티브 포함, form.tsx 없음)
   hooks/       useLocalState, useLastData
-  auth/        Firebase 클라이언트 코드 (미구현 상태로 보존)
   assets/      Lottie 애니메이션 JSON
 prisma/schema.prisma
 ```
@@ -101,7 +100,7 @@ prisma/schema.prisma
 
 - Node.js 20+
 - PostgreSQL 데이터베이스
-- Mapbox / Cloudinary / Firebase 계정
+- Supabase 프로젝트 (Storage 버킷 `places` 포함)
 
 ### 환경 변수
 
@@ -110,15 +109,8 @@ prisma/schema.prisma
 ```bash
 DATABASE_URL="postgresql://user:password@localhost:5432/myplace"
 
-NEXT_PUBLIC_MAPBOX_API_TOKEN=
-
-NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=
-NEXT_PUBLIC_CLOUDINARY_KEY=
-CLOUDINARY_SECRET=
-
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SECRET_KEY=
 ```
 
 ### 설치 및 실행
@@ -145,10 +137,8 @@ npm run test:watch  # Vitest 단위 테스트(watch 모드)
 
 - **인증이 구현되어 있지 않습니다.** 모든 쓰기 경로는
   `src/lib/auth.ts`의 `getCurrentUserId()`를 통과하며, 이 함수는 고정값
-  `"1"`을 반환합니다. 인증을 붙일 때 이 함수 하나만 실제 구현으로 바꾸면
-  됩니다. 클라이언트 Firebase 코드(`src/auth/`)는 남아 있으나 로그인 폼과
-  세션 검증이 없고, `tokenCookies.ts`가 요청하는 `/api/login`·`/api/logout`
-  라우트는 존재하지 않습니다.
+  `"1"`을 반환합니다. 인증 벤더는 Supabase Auth로 확정했으며, 인증을 붙일
+  때 이 함수 하나만 실제 구현으로 바꾸면 됩니다.
 - 홈 카드가 shadcn Card 기반으로 재구성되면서, 이전의 티켓 절취선 디자인은
   더 이상 재현하지 않습니다.
 - 테스트는 Zod 스키마와 순수 함수에 대한 Vitest 단위 테스트만 있습니다.
@@ -156,3 +146,5 @@ npm run test:watch  # Vitest 단위 테스트(watch 모드)
 - `place(id)` 단건 조회, 반경 10km `nearby` 조회, 장소 삭제 기능은 이전
   GraphQL 스키마에 정의되어 있었으나 호출하는 화면이 없어 이전 대상에서
   제외했습니다.
+- **HEIC 미지원** — 파일 선택이 JPEG·PNG·WebP로 제한됩니다. Next.js 내장 이미지 최적화가 HEIC 출력을 지원하지 않기 때문입니다.
+- **OpenFreeMap 타일은 SLA가 없습니다.** 기부로 운영되는 무료 서비스입니다. 안정성이 필요해지면 `mapStyle` URL만 다른 제공자로 바꾸면 됩니다.
