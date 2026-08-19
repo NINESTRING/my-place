@@ -120,6 +120,8 @@ src/
 
 `zod`, `@hookform/resolvers`, `tailwindcss@4`, `@tailwindcss/postcss`, shadcn 관련(`@base-ui/react`, `lucide-react`, `clsx`, `tailwind-merge`, `class-variance-authority`, `sonner`, `tw-animate-css`, `next-themes`).
 
+`shadcn` 패키지 자체는 devDependency로 남는다. CLI는 `npx`로 실행하지만, 이 패키지가 export하는 `tailwind.css`를 `app/globals.css`가 import하기 때문이다.
+
 shadcn의 현재 기본 스타일은 `base-nova`이고 그 프리미티브는 Radix가 아니라 `@base-ui/react`다. 또한 shadcn은 react-hook-form 전용 `Form` 컴포넌트를 폐기하고 `Field`로 대체했으므로, 폼은 `Field` + react-hook-form `Controller`로 배선한다.
 
 ### 상향

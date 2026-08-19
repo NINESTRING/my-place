@@ -317,7 +317,9 @@ npx shadcn@latest add button input textarea field card sonner skeleton toggle-gr
 
 생성물은 `src/components/ui/`에 놓인다. 설치 후 다음 파일이 존재하는지 확인한다: `button.tsx`, `input.tsx`, `textarea.tsx`, `field.tsx`, `label.tsx`, `card.tsx`, `sonner.tsx`, `skeleton.tsx`, `toggle-group.tsx`.
 
-`shadcn` CLI 자체는 `npx`로 실행하므로 **`package.json`의 dependencies에 `shadcn`을 넣지 않는다.** CLI가 자기 자신을 런타임 의존성으로 추가했다면 제거한다.
+`shadcn`은 **`dependencies`가 아니라 `devDependencies`에 둔다.** CLI가 자기 자신을 runtime dependency로 추가했다면 devDependencies로 옮긴다.
+
+런타임 의존성이 아닌 이유는 명령을 `npx`로 실행하기 때문이고, 그럼에도 완전히 제거할 수는 없는 이유는 이 패키지가 `./tailwind.css`(→ `dist/tailwind.css`)를 export하고 CLI가 생성한 `app/globals.css`가 그것을 `@import`하기 때문이다. 생성된 컴포넌트들이 쓰는 `data-horizontal:`·`data-vertical:`·`has-data-checked:` 커스텀 variant가 거기 정의되어 있다. **이 CSS를 `globals.css`에 인라인해 의존성을 없애려 하지 말 것** — 762줄의 서드파티 CSS가 앱 테마와 뒤섞이고, 업스트림 수정이 반영되지 않으며, 이후 `shadcn add`를 실행할 때마다 재추가되는 import를 수동 병합해야 한다.
 
 `style`은 `base-nova`이며, 이 스타일의 프리미티브는 Radix가 아니라 `@base-ui/react`다. CLI가 `@base-ui/react`를 설치하지 않은 채 그것을 import하는 파일을 생성하는 경우가 있으므로, 생성 후 `npm ls @base-ui/react`로 확인하고 없으면 설치한다.
 
