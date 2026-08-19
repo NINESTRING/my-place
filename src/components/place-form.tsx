@@ -1,11 +1,14 @@
 "use client"
 
+import "mapbox-gl/dist/mapbox-gl.css"
+
 import { zodResolver } from "@hookform/resolvers/zod"
 import exifr from "exifr"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type ChangeEvent } from "react"
 import { Controller, useForm } from "react-hook-form"
+import Map, { Marker, type MapRef } from "react-map-gl/mapbox"
 import { toast } from "sonner"
 import { CategoryPicker } from "@/components/category-picker"
 import { StarRating } from "@/components/star-rating"
@@ -47,6 +50,7 @@ async function uploadToCloudinary(
 export function PlaceForm() {
   const router = useRouter()
   const lottieRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<MapRef>(null)
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [exif, setExif] = useState<ExifData | null>(null)
@@ -105,6 +109,14 @@ export function PlaceForm() {
         createDate: parsed.CreateDate ?? new Date(selected.lastModified),
       })
       setPreview(URL.createObjectURL(selected))
+
+      // 지도가 이미 떠 있는 상태(=사진을 다른 것으로 교체)라면 새 좌표로
+      // 이동시킨다. 첫 사진은 initialViewState 가 좌표를 중심으로 잡아 주므로
+      // 아직 마운트되지 않은 mapRef 는 무시해도 된다.
+      mapRef.current?.panTo(
+        { lng: parsed.longitude, lat: parsed.latitude },
+        { duration: 3000 }
+      )
     } catch {
       toast.error("사진을 읽지 못했습니다.")
       event.target.value = ""
@@ -203,6 +215,28 @@ export function PlaceForm() {
           </p>
         )}
       </div>
+
+      {exif && (
+        <div className="h-64 w-full overflow-hidden rounded-lg">
+          <Map
+            ref={mapRef}
+            initialViewState={{
+              longitude: exif.longitude,
+              latitude: exif.latitude,
+              zoom: 13,
+            }}
+            mapStyle="mapbox://styles/mapbox/streets-v12"
+            mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_API_TOKEN}
+            style={{ width: "100%", height: "100%" }}
+          >
+            <Marker
+              longitude={exif.longitude}
+              latitude={exif.latitude}
+              color="#ef4444"
+            />
+          </Map>
+        </div>
+      )}
 
       <Field>
         <FieldLabel htmlFor="description">설명</FieldLabel>

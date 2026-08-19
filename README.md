@@ -11,7 +11,7 @@
 | 페이지 | 경로 | 설명 |
 | --- | --- | --- |
 | 홈 | `/` | 등록된 모든 장소를 shadcn `Card` 기반 사진 카드로 나열 |
-| 등록 | `/create` | 사진 업로드 → EXIF 파싱 → 지도 자동 이동 → 설명/별점/카테고리 입력 후 저장 |
+| 등록 | `/create` | 사진 업로드 → EXIF 파싱 → 지도에 촬영 위치 표시 → 설명/별점/카테고리 입력 후 저장 |
 | 지도 | `/map` | Mapbox 지도. 화면에 보이는 영역(bounds) 안의 장소만 조회해 마커로 표시, 마커 클릭 시 사진 팝업 |
 
 - **EXIF 기반 자동 위치 인식** — `exifr`로 사진에서 위경도·촬영일시를 읽고, 정보가 없는 사진은 등록을 거부합니다.
@@ -135,9 +135,10 @@ npm run dev            # http://localhost:3000
 ### 그 외 스크립트
 
 ```bash
-npm run build     # 프로덕션 빌드
-npm start         # 프로덕션 서버 실행
-npm test          # Vitest 단위 테스트
+npm run build       # 프로덕션 빌드
+npm start           # 프로덕션 서버 실행
+npm test            # Vitest 단위 테스트
+npm run test:watch  # Vitest 단위 테스트(watch 모드)
 ```
 
 ## 미완성 / 알려진 이슈
