@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { publicIdFromUrl, revivePlace, type SerializedPlace } from "@/lib/places"
+import {
+  clampRating,
+  publicIdFromUrl,
+  revivePlace,
+  type SerializedPlace,
+} from "@/lib/places"
 
 describe("publicIdFromUrl", () => {
   it("Cloudinary secure_url의 마지막 세그먼트를 반환한다", () => {
@@ -18,6 +23,32 @@ describe("publicIdFromUrl", () => {
 
   it("끝에 슬래시가 있으면 빈 문자열을 반환한다", () => {
     expect(publicIdFromUrl("https://res.cloudinary.com/demo/")).toBe("")
+  })
+})
+
+describe("clampRating", () => {
+  it("-1 을 0 으로 고정한다", () => {
+    expect(clampRating(-1)).toBe(0)
+  })
+
+  it("0 은 그대로 0 을 반환한다", () => {
+    expect(clampRating(0)).toBe(0)
+  })
+
+  it("3 은 범위 안이므로 그대로 반환한다", () => {
+    expect(clampRating(3)).toBe(3)
+  })
+
+  it("5 는 그대로 5 를 반환한다", () => {
+    expect(clampRating(5)).toBe(5)
+  })
+
+  it("1000 처럼 상한을 넘는 값은 5 로 고정한다", () => {
+    expect(clampRating(1000)).toBe(5)
+  })
+
+  it("2.5 처럼 정수가 아닌 값은 반올림하지 않고 그대로 반환한다", () => {
+    expect(clampRating(2.5)).toBe(2.5)
   })
 })
 

@@ -19,6 +19,11 @@ function withPublicId(place: Place): PlaceWithPublicId {
   return { ...place, publicId: publicIdFromUrl(place.image) }
 }
 
+/** 별점을 0~5 범위로 고정한다. 마이그레이션 이전 데이터에는 상한·하한이 없었다. */
+export function clampRating(rating: number): number {
+  return Math.max(0, Math.min(5, rating))
+}
+
 /** JSON 전송 후의 Place — Date 필드가 문자열로 바뀐 형태. */
 export type SerializedPlace = Omit<
   PlaceWithPublicId,
