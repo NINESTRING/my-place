@@ -705,7 +705,12 @@ export const boundsQuerySchema = z
 
 export const placeInputSchema = z.object({
   description: z.string().min(1, "설명을 입력해 주세요").max(500),
-  image: z.string().min(1),
+  image: z
+    .string()
+    .url()
+    .refine((u) => u.startsWith("https://res.cloudinary.com/"), {
+      message: "이미지 URL이 올바르지 않습니다",
+    }),
   imageCreationTime: z.coerce.date(),
   latitude,
   longitude,
@@ -1615,7 +1620,7 @@ export function PlaceForm() {
 
     try {
       const parsed = await exifr.parse(selected)
-      if (!parsed?.latitude || !parsed?.longitude) {
+      if (parsed?.latitude == null || parsed?.longitude == null) {
         toast.error("사진에 위치 정보가 없습니다. 다른 사진을 선택해 주세요.")
         event.target.value = ""
         return
@@ -1676,12 +1681,14 @@ export function PlaceForm() {
       }
 
       toast.success("장소를 저장했습니다.")
+      // 성공 시에는 setSubmitting(false)를 하지 않는다. router.push는 await되지
+      // 않으므로 여기서 버튼을 되살리면 내비게이션이 끝나기 전에 두 번째 제출이
+      // 들어와 같은 장소가 중복 저장될 수 있다.
       router.push("/map")
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "저장 중 문제가 발생했습니다."
       )
-    } finally {
       setSubmitting(false)
     }
   }
@@ -1770,6 +1777,10 @@ export function PlaceForm() {
   )
 }
 ```
+
+제출 핸들러는 성공 시 버튼을 되살리지 않는다. 실패로 조기 반환하는 경로(서명 실패, 액션 실패)에서는 각각 `setSubmitting(false)`를 호출해야 한다.
+
+EXIF 좌표 판정에 `!parsed?.latitude`를 쓰면 안 된다. 위도 0(적도)이나 경도 0(본초자오선)이 falsy라 GPS가 있는 사진을 거부한다. `== null`로 존재 여부만 본다.
 
 shadcn은 최신 스타일에서 react-hook-form 전용 `Form`/`FormField`를 폐기하고 `Field`로 대체했다. `Field`는 react-hook-form을 알지 못하므로 `Controller`로 직접 배선하고, 오류는 `FieldError`의 `errors` prop에 배열로 넘긴다(시그니처: `errors?: Array<{ message?: string } | undefined>`).
 
