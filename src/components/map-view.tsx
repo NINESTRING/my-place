@@ -1,6 +1,6 @@
 "use client"
 
-import "mapbox-gl/dist/mapbox-gl.css"
+import "maplibre-gl/dist/maplibre-gl.css"
 
 import Image from "next/image"
 import { useEffect, useState } from "react"
@@ -8,7 +8,7 @@ import Map, {
   Marker,
   Popup,
   type ViewStateChangeEvent,
-} from "react-map-gl/mapbox"
+} from "react-map-gl/maplibre"
 import { useDebounce } from "use-debounce"
 import { useLastData } from "@/hooks/use-last-data"
 import { useLocalState } from "@/hooks/use-local-state"
@@ -106,7 +106,7 @@ export function MapView({
   }
 
   // Map의 initialViewState는 마운트 시점에 한 번만 적용되고 이후로는
-  // 다시 읽지 않는다(react-map-gl v8, node_modules/@vis.gl/react-mapbox
+  // 다시 읽지 않는다(react-map-gl v8, node_modules/@vis.gl/react-maplibre
   // 내부 _initialize/_updateViewState 참고). 자식(Map)의 마운트 effect는
   // 부모인 이 컴포넌트의 effect(=localStorage 읽기)보다 먼저 실행되므로,
   // hydrated 이전에 Map을 마운트하면 항상 DEFAULT_VIEWPORT로 굳어져
@@ -122,8 +122,7 @@ export function MapView({
       <Map
         initialViewState={viewport}
         onMoveEnd={onMoveEnd}
-        mapStyle="mapbox://styles/mapbox/streets-v12"
-        mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_API_TOKEN}
+        mapStyle="https://tiles.openfreemap.org/styles/liberty"
         style={{ width: "100%", height: "100%" }}
       >
         {shownPlaces.map((place) => (

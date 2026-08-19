@@ -1,6 +1,6 @@
 "use client"
 
-import "mapbox-gl/dist/mapbox-gl.css"
+import "maplibre-gl/dist/maplibre-gl.css"
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import exifr from "exifr"
@@ -8,7 +8,7 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type ChangeEvent } from "react"
 import { Controller, useForm } from "react-hook-form"
-import Map, { Marker, type MapRef } from "react-map-gl/mapbox"
+import Map, { Marker, type MapRef } from "react-map-gl/maplibre"
 import { toast } from "sonner"
 import { CategoryPicker } from "@/components/category-picker"
 import { StarRating } from "@/components/star-rating"
@@ -225,8 +225,7 @@ export function PlaceForm() {
               latitude: exif.latitude,
               zoom: 13,
             }}
-            mapStyle="mapbox://styles/mapbox/streets-v12"
-            mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_API_TOKEN}
+            mapStyle="https://tiles.openfreemap.org/styles/liberty"
             style={{ width: "100%", height: "100%" }}
           >
             <Marker
