@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { Header } from "@/components/header"
 import { Toaster } from "@/components/ui/sonner"
 import "./globals.css"
 
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className="bg-background text-foreground min-h-dvh antialiased">
+        <Header />
         {children}
         <Toaster />
       </body>
