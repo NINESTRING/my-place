@@ -113,6 +113,9 @@ NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SECRET_KEY=
 ```
 
+Supabase 프로젝트에는 `supabase/migrations/`의 SQL도 적용해야 합니다. Storage
+버킷 `places` 생성과 `public.places`의 RLS 활성화를 담고 있습니다.
+
 ### 설치 및 실행
 
 ```bash
