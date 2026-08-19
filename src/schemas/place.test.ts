@@ -3,7 +3,7 @@ import { boundsQuerySchema, placeInputSchema } from "@/schemas/place"
 
 const validInput = {
   description: "한강 야경",
-  image: "https://res.cloudinary.com/demo/image/upload/v1/a.jpg",
+  image: "0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061.jpg",
   imageCreationTime: new Date("2026-01-01T00:00:00.000Z"),
   latitude: 37.65874,
   longitude: 126.97759,
@@ -50,31 +50,64 @@ describe("placeInputSchema", () => {
     ).toBe(false)
   })
 
-  it("Cloudinary 이미지 URL을 통과시킨다", () => {
+  it("uuid 형식의 storage path 를 통과시킨다", () => {
     const result = placeInputSchema.safeParse({
       ...validInput,
-      image: "https://res.cloudinary.com/demo/image/upload/v1/a.jpg",
+      image: "0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061.webp",
     })
     expect(result.success).toBe(true)
   })
 
-  it("URL이 아닌 문자열을 image로 거부한다", () => {
+  it("png 확장자를 통과시킨다", () => {
     const result = placeInputSchema.safeParse({
       ...validInput,
-      image: "not-a-url",
+      image: "0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061.png",
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("전체 URL 을 image 로 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      image:
+        "https://xhttvfbzqhprmentinxm.supabase.co/storage/v1/object/public/places/a.jpg",
     })
     expect(result.success).toBe(false)
   })
 
-  it("Cloudinary가 아닌 호스트의 URL을 image로 거부한다", () => {
+  it("허용하지 않는 확장자를 거부한다", () => {
     const result = placeInputSchema.safeParse({
       ...validInput,
-      image: "https://evil.example.com/a.jpg",
+      image: "0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061.heic",
     })
     expect(result.success).toBe(false)
   })
 
-  it("빈 문자열을 image로 거부한다", () => {
+  it("uuid 형식이 아닌 파일명을 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      image: "not-a-uuid.jpg",
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("경로 이탈 시도를 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      image: "../../etc/passwd.jpg",
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("하위 폴더를 포함한 경로를 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      image: "sub/0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061.jpg",
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("빈 문자열을 image 로 거부한다", () => {
     const result = placeInputSchema.safeParse({ ...validInput, image: "" })
     expect(result.success).toBe(false)
   })

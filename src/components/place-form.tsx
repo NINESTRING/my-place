@@ -15,7 +15,7 @@ import { StarRating } from "@/components/star-rating"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
-import { createPlaceAction, createUploadSignature } from "@/actions/place"
+import { createPlaceAction, createUploadUrlAction } from "@/actions/place"
 import { placeFormSchema, type PlaceFormValues } from "@/schemas/place"
 
 type ExifData = {
@@ -24,27 +24,17 @@ type ExifData = {
   createDate: Date
 }
 
-async function uploadToCloudinary(
-  file: File,
-  signature: string,
-  timestamp: number
-): Promise<string> {
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
-  const formData = new FormData()
-  formData.append("file", file)
-  formData.append("signature", signature)
-  formData.append("timestamp", String(timestamp))
-  formData.append("api_key", process.env.NEXT_PUBLIC_CLOUDINARY_KEY ?? "")
-
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
-    { method: "POST", body: formData }
-  )
+/**
+ * 서버가 발급한 서명 URL 로 파일을 직접 올린다. supabase-js 를 클라이언트
+ * 번들에 넣지 않기 위해 raw fetch 를 쓴다.
+ */
+async function uploadToStorage(file: File, signedUrl: string): Promise<void> {
+  const res = await fetch(signedUrl, {
+    method: "PUT",
+    headers: { "content-type": file.type },
+    body: file,
+  })
   if (!res.ok) throw new Error("이미지 업로드에 실패했습니다")
-
-  const json = (await res.json()) as { secure_url?: string }
-  if (!json.secure_url) throw new Error("이미지 업로드 응답이 올바르지 않습니다")
-  return json.secure_url
 }
 
 export function PlaceForm() {
@@ -137,22 +127,18 @@ export function PlaceForm() {
 
     setSubmitting(true)
     try {
-      const signatureResult = await createUploadSignature()
-      if (!signatureResult.ok) {
-        toast.error(signatureResult.error)
+      const uploadUrl = await createUploadUrlAction(file.type)
+      if (!uploadUrl.ok) {
+        toast.error(uploadUrl.error)
         setSubmitting(false)
         return
       }
 
-      const imageUrl = await uploadToCloudinary(
-        file,
-        signatureResult.signature,
-        signatureResult.timestamp
-      )
+      await uploadToStorage(file, uploadUrl.signedUrl)
 
       const result = await createPlaceAction({
         description: values.description,
-        image: imageUrl,
+        image: uploadUrl.path,
         imageCreationTime: exif.createDate,
         latitude: exif.latitude,
         longitude: exif.longitude,
@@ -205,7 +191,7 @@ export function PlaceForm() {
         <input
           id="photo"
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           className="sr-only"
           onChange={onFileChange}
         />

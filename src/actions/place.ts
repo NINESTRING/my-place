@@ -8,26 +8,46 @@
  */
 
 import { revalidatePath } from "next/cache"
-import { v2 as cloudinary } from "cloudinary"
 import { getCurrentUserId } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { PLACES_BUCKET, supabaseAdmin } from "@/lib/supabase"
 import { placeInputSchema } from "@/schemas/place"
 
 export type ActionResult<T> =
   | ({ ok: true } & T)
   | { ok: false; error: string }
 
-export async function createUploadSignature(): Promise<
-  ActionResult<{ signature: string; timestamp: number }>
-> {
-  const secret = process.env.CLOUDINARY_SECRET
-  if (!secret) {
-    return { ok: false, error: "Cloudinary 설정이 없습니다" }
+/** 허용 MIME 타입과 저장 확장자. HEIC 는 Next 내장 최적화가 다루지 못해 제외한다. */
+const EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+}
+
+/**
+ * 브라우저가 Storage 에 직접 올릴 수 있는 서명 URL 을 발급한다.
+ *
+ * 경로를 서버가 정하는 것이 요점이다. 클라이언트가 경로를 지정하면 남의
+ * 객체를 덮어쓸 수 있다. 서명 URL 은 토큰 자체가 인증 수단이라(유효기간
+ * 2시간) 브라우저에 Supabase 키를 내보내지 않아도 된다.
+ */
+export async function createUploadUrlAction(
+  contentType: string
+): Promise<ActionResult<{ signedUrl: string; path: string }>> {
+  const extension = EXTENSIONS[contentType]
+  if (!extension) {
+    return { ok: false, error: "JPEG, PNG, WebP 이미지만 올릴 수 있습니다" }
   }
 
-  const timestamp = Math.round(Date.now() / 1000)
-  const signature = cloudinary.utils.api_sign_request({ timestamp }, secret)
-  return { ok: true, signature, timestamp }
+  const { data, error } = await supabaseAdmin.storage
+    .from(PLACES_BUCKET)
+    .createSignedUploadUrl(`${crypto.randomUUID()}.${extension}`)
+
+  if (error || !data) {
+    return { ok: false, error: "업로드 URL 발급에 실패했습니다" }
+  }
+
+  return { ok: true, signedUrl: data.signedUrl, path: data.path }
 }
 
 export async function createPlaceAction(

@@ -39,14 +39,21 @@ export const boundsQuerySchema = z
     ne: { latitude: q.neLat, longitude: q.neLng },
   }))
 
+/**
+ * 저장 경로는 서버 액션이 crypto.randomUUID() 로 정하므로 형식이 고정되어
+ * 있다. 이 정규식은 클라이언트가 보낸 값이 그 형식임을 확인해 경로 이탈이나
+ * 임의 객체 참조를 막는다. 하위 폴더는 쓰지 않는다.
+ */
+const imagePath = z
+  .string()
+  .regex(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/,
+    "이미지 경로가 올바르지 않습니다"
+  )
+
 export const placeInputSchema = z.object({
   description: z.string().min(1, "설명을 입력해 주세요").max(500),
-  image: z
-    .string()
-    .url()
-    .refine((u) => u.startsWith("https://res.cloudinary.com/"), {
-      message: "이미지 URL이 올바르지 않습니다",
-    }),
+  image: imagePath,
   imageCreationTime: z.coerce.date(),
   latitude,
   longitude,
