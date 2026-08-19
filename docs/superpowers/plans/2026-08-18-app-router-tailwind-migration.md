@@ -1492,10 +1492,10 @@ export function CategoryPicker({
 }) {
   return (
     <ToggleGroup
-      type="single"
-      value={String(value)}
+      value={[String(value)]}
       onValueChange={(next) => {
-        if (next) onChange(Number(next))
+        const selected = next[0]
+        if (selected) onChange(Number(selected))
       }}
       variant="outline"
       className="justify-start"
@@ -1514,7 +1514,7 @@ export function CategoryPicker({
 }
 ```
 
-`ToggleGroup`은 문자열 값만 다루므로 경계에서 변환한다. 빈 문자열(선택 해제)은 무시해 항상 하나가 선택된 상태를 유지한다. 라벨은 Task 3에서 만든 `@/lib/categories`를 공유하므로 `PlaceCard`와 어긋날 수 없다.
+`@base-ui/react`의 `ToggleGroup`은 Radix와 달리 `type` prop이 없고 값을 **배열**로 다룬다(단일 선택이 기본). 경계에서 숫자↔문자열을 변환하고, 선택 해제로 빈 배열이 오면 무시해 항상 하나가 선택된 상태를 유지한다. 라벨은 Task 3에서 만든 `@/lib/categories`를 공유하므로 `PlaceCard`와 어긋날 수 없다.
 
 - [ ] **Step 4: 등록 폼 작성**
 
