@@ -11,7 +11,7 @@ describe("revivePlace", () => {
     longitude: 126.97759,
     title: "한강 야경",
     description: "다리 조명이 켜지는 시간에 갔다",
-    category: 2,
+    category: "RESTAURANT",
     createdAt: "2026-01-02T00:00:00.000Z",
     updatedAt: "2026-01-03T00:00:00.000Z",
   }

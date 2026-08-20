@@ -85,7 +85,7 @@ export function PlaceForm({
     formState: { errors },
   } = useForm<PlaceFormValues>({
     resolver: zodResolver(placeFormSchema),
-    defaultValues: { title: "", description: "", category: 1 },
+    defaultValues: { title: "", description: "", category: null },
   })
 
   // lottie-web 은 import 시점에 document 에 접근하므로 브라우저에서만 불러온다.
@@ -375,7 +375,10 @@ export function PlaceForm({
       </Field>
 
       <Field>
-        <FieldLabel>카테고리</FieldLabel>
+        <FieldLabel>
+          카테고리{" "}
+          <span className="text-muted-foreground font-normal">(선택)</span>
+        </FieldLabel>
         <Controller
           control={control}
           name="category"

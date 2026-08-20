@@ -19,10 +19,18 @@ model Place {
   longitude         Float
   title             String
   description       String?
-  category          Int
+  category          PlaceCategory?
   createdAt         DateTime @default(now()) @map(name: "created_at")
   updatedAt         DateTime @default(now()) @map(name: "updated_at")
 
   @@index([userId], name: "places.userId")
   @@map(name: "places")
+}
+
+enum PlaceCategory {
+  CAFE
+  RESTAURANT
+  STAY
+  ATTRACTION
+  SCENERY
 }

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { PlaceCategory } from "@/generated/prisma/enums"
 
 const latitude = z.number().min(-90).max(90)
 const longitude = z.number().min(-180).max(180)
@@ -81,6 +82,11 @@ const placeFields = {
     .max(500, "설명은 500자까지 쓸 수 있습니다")
     .transform((value) => value.trim() || undefined)
     .optional(),
+  /**
+   * 선택 값이다. 기본값을 두면 신경 쓰지 않은 장소가 전부 그 값으로
+   * 저장되어(옛 코드의 category: 1 = 카페) 값 자체를 믿을 수 없게 된다.
+   */
+  category: z.enum(PlaceCategory).nullable(),
 }
 
 export const placeInputSchema = z.object({
@@ -89,15 +95,11 @@ export const placeInputSchema = z.object({
   imageCreationTime: z.coerce.date(),
   latitude,
   longitude,
-  category: z.number().int().min(1).max(4),
 })
 
 export type PlaceInput = z.infer<typeof placeInputSchema>
 
 /** 폼이 다루는 값. 이미지는 업로드 전이므로 File이고 좌표는 EXIF에서 온다. */
-export const placeFormSchema = z.object({
-  ...placeFields,
-  category: z.number().int().min(1).max(4),
-})
+export const placeFormSchema = z.object(placeFields)
 
 export type PlaceFormValues = z.infer<typeof placeFormSchema>

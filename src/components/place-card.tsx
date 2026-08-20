@@ -10,6 +10,7 @@ export function PlaceCard({ place }: { place: Place }) {
     month: "long",
     day: "numeric",
   }).format(place.imageCreationTime)
+  const category = categoryLabel(place.category)
 
   return (
     <Card className="overflow-hidden p-0">
@@ -25,7 +26,7 @@ export function PlaceCard({ place }: { place: Place }) {
       <CardContent className="space-y-2 p-4">
         <div className="text-muted-foreground flex items-center justify-between text-sm">
           <span>{takenAt}</span>
-          <span>{categoryLabel(place.category)}</span>
+          {category && <span>{category}</span>}
         </div>
         <p className="font-medium">{place.title}</p>
         {place.description && (

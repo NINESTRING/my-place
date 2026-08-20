@@ -12,7 +12,7 @@ const validInput = {
   imageCreationTime: new Date("2026-01-01T00:00:00.000Z"),
   latitude: 37.65874,
   longitude: 126.97759,
-  category: 2,
+  category: "RESTAURANT",
 }
 
 describe("placeInputSchema", () => {
@@ -85,9 +85,31 @@ describe("placeInputSchema", () => {
     expect(result.success).toBe(false)
   })
 
-  it("카테고리가 범위를 벗어나면 거부한다", () => {
+  it("정의된 카테고리를 통과시킨다", () => {
     expect(
-      placeInputSchema.safeParse({ ...validInput, category: 5 }).success
+      placeInputSchema.safeParse({ ...validInput, category: "SCENERY" }).success
+    ).toBe(true)
+  })
+
+  it("카테고리 미선택(null)을 통과시킨다", () => {
+    const result = placeInputSchema.safeParse({ ...validInput, category: null })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.category).toBeNull()
+    }
+  })
+
+  it("enum 에 없는 카테고리를 거부한다", () => {
+    // "기타" 는 두지 않는다. nullable 컬럼에 ETC 까지 있으면 "기타" 와
+    // "미선택" 이 같은 말을 두 번 하게 된다.
+    expect(
+      placeInputSchema.safeParse({ ...validInput, category: "ETC" }).success
+    ).toBe(false)
+  })
+
+  it("옛 정수 카테고리 코드를 거부한다", () => {
+    expect(
+      placeInputSchema.safeParse({ ...validInput, category: 2 }).success
     ).toBe(false)
   })
 
