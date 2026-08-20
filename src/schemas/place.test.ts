@@ -11,7 +11,6 @@ const validInput = {
   imageCreationTime: new Date("2026-01-01T00:00:00.000Z"),
   latitude: 37.65874,
   longitude: 126.97759,
-  rating: 4,
   category: 2,
 }
 
@@ -37,15 +36,6 @@ describe("placeInputSchema", () => {
   it("설명이 비어 있으면 거부한다", () => {
     const result = placeInputSchema.safeParse({ ...validInput, description: "" })
     expect(result.success).toBe(false)
-  })
-
-  it("별점이 범위를 벗어나면 거부한다", () => {
-    expect(placeInputSchema.safeParse({ ...validInput, rating: 0 }).success).toBe(
-      false
-    )
-    expect(placeInputSchema.safeParse({ ...validInput, rating: 6 }).success).toBe(
-      false
-    )
   })
 
   it("카테고리가 범위를 벗어나면 거부한다", () => {

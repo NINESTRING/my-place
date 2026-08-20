@@ -3,7 +3,6 @@ import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { categoryLabel } from "@/lib/categories"
 import { publicImageUrl } from "@/lib/images"
-import { clampRating } from "@/lib/places"
 
 export function PlaceCard({ place }: { place: Place }) {
   const takenAt = new Intl.DateTimeFormat("ko-KR", {
@@ -11,8 +10,6 @@ export function PlaceCard({ place }: { place: Place }) {
     month: "long",
     day: "numeric",
   }).format(place.imageCreationTime)
-
-  const stars = clampRating(place.rating)
 
   return (
     <Card className="overflow-hidden p-0">
@@ -31,12 +28,6 @@ export function PlaceCard({ place }: { place: Place }) {
           <span>{categoryLabel(place.category)}</span>
         </div>
         <p className="font-medium">{place.description}</p>
-        <p className="text-sm" aria-label={`별점 ${stars}점`}>
-          {"★".repeat(stars)}
-          <span className="text-muted-foreground">
-            {"★".repeat(5 - stars)}
-          </span>
-        </p>
       </CardContent>
     </Card>
   )

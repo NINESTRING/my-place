@@ -64,7 +64,6 @@ export const placeInputSchema = z.object({
   imageCreationTime: z.coerce.date(),
   latitude,
   longitude,
-  rating: z.number().int().min(1).max(5),
   category: z.number().int().min(1).max(4),
 })
 
@@ -73,7 +72,6 @@ export type PlaceInput = z.infer<typeof placeInputSchema>
 /** 폼이 다루는 값. 이미지는 업로드 전이므로 File이고 좌표는 EXIF에서 온다. */
 export const placeFormSchema = z.object({
   description: z.string().min(1, "설명을 입력해 주세요").max(500),
-  rating: z.number().int().min(1).max(5),
   category: z.number().int().min(1).max(4),
 })
 

@@ -18,7 +18,6 @@ model Place {
   latitude          Float
   longitude         Float
   description       String
-  rating            Int
   category          Int
   createdAt         DateTime @default(now()) @map(name: "created_at")
   updatedAt         DateTime @default(now()) @map(name: "updated_at")

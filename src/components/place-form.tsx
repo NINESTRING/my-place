@@ -19,7 +19,6 @@ import { Controller, useForm } from "react-hook-form"
 import Map, { Marker, type MapRef } from "react-map-gl/maplibre"
 import { toast } from "sonner"
 import { CategoryPicker } from "@/components/category-picker"
-import { StarRating } from "@/components/star-rating"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
@@ -85,7 +84,7 @@ export function PlaceForm({
     formState: { errors },
   } = useForm<PlaceFormValues>({
     resolver: zodResolver(placeFormSchema),
-    defaultValues: { description: "", rating: 3, category: 1 },
+    defaultValues: { description: "", category: 1 },
   })
 
   // lottie-web 은 import 시점에 document 에 접근하므로 브라우저에서만 불러온다.
@@ -253,7 +252,6 @@ export function PlaceForm({
         imageCreationTime: exif.createDate,
         latitude: exif.latitude,
         longitude: exif.longitude,
-        rating: values.rating,
         category: values.category,
       })
 
@@ -357,18 +355,6 @@ export function PlaceForm({
           )}
         />
         <FieldError errors={[errors.description]} />
-      </Field>
-
-      <Field>
-        <FieldLabel>별점</FieldLabel>
-        <Controller
-          control={control}
-          name="rating"
-          render={({ field }) => (
-            <StarRating value={field.value} onChange={field.onChange} />
-          )}
-        />
-        <FieldError errors={[errors.rating]} />
       </Field>
 
       <Field>
