@@ -51,3 +51,15 @@ export async function getAllPlaces(userId: string): Promise<Place[]> {
   })
 }
 
+/**
+ * 가장 최근에 다녀온 장소 한 건. 첫 화면을 어디로 띄울지 정하는 데 쓴다.
+ *
+ * 정렬 기준은 목록과 같은 촬영 시각이다. 등록 시각으로 잡으면 예전 사진을
+ * 방금 올렸을 때 목록 맨 위와 지도가 서로 다른 곳을 가리킨다.
+ */
+export async function getLatestPlace(userId: string): Promise<Place | null> {
+  return prisma.place.findFirst({
+    where: { userId },
+    orderBy: { imageCreationTime: "desc" },
+  })
+}

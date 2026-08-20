@@ -9,6 +9,8 @@ export const coordinatesSchema = z.object({
   longitude,
 })
 
+export type Coordinates = z.infer<typeof coordinatesSchema>
+
 export const boundsSchema = z.object({
   sw: coordinatesSchema,
   ne: coordinatesSchema,

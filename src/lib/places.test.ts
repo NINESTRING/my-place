@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { revivePlace, type SerializedPlace } from "@/lib/places"
+import { boundsAround, revivePlace, type SerializedPlace } from "@/lib/places"
 
 describe("revivePlace", () => {
   const serialized: SerializedPlace = {
@@ -38,5 +38,23 @@ describe("revivePlace", () => {
     expect(result.title).toBe(serialized.title)
     expect(result.description).toBe(serialized.description)
     expect(result.category).toBe(serialized.category)
+  })
+})
+
+describe("boundsAround", () => {
+  it("지점을 가운데 두는 상자를 만든다", () => {
+    const bounds = boundsAround({ latitude: 37.5, longitude: 127 })
+    expect(bounds).toEqual({
+      sw: { latitude: 37.45, longitude: 126.95 },
+      ne: { latitude: 37.55, longitude: 127.05 },
+    })
+  })
+
+  it("극지방에서 위도를 -90..90 안으로 자른다", () => {
+    const north = boundsAround({ latitude: 89.98, longitude: 0 })
+    expect(north.ne.latitude).toBe(90)
+
+    const south = boundsAround({ latitude: -89.98, longitude: 0 })
+    expect(south.sw.latitude).toBe(-90)
   })
 })

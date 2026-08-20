@@ -42,7 +42,7 @@ import { useLastData } from "@/hooks/use-last-data"
 import { useLocalState } from "@/hooks/use-local-state"
 import { publicImageUrl } from "@/lib/images"
 import { revivePlace, type SerializedPlace } from "@/lib/places"
-import type { Bounds, PlaceFormValues } from "@/schemas/place"
+import type { Bounds, Coordinates, PlaceFormValues } from "@/schemas/place"
 
 if (typeof window !== "undefined") {
   setWorkerUrl("/maplibre/maplibre-gl-worker.mjs")
@@ -50,6 +50,7 @@ if (typeof window !== "undefined") {
 
 type Viewport = { latitude: number; longitude: number; zoom: number }
 
+// 보여 줄 장소도 저장된 위치도 없고 현재 위치도 알 수 없을 때의 좌표.
 const DEFAULT_VIEWPORT: Viewport = {
   latitude: 37.65874,
   longitude: 126.97759,
@@ -60,7 +61,8 @@ const DEFAULT_VIEWPORT: Viewport = {
 // 버튼은 이 컨테이너를 기준으로 절대 배치되므로 relative 가 필요하다.
 const SHELL_CLASS = "relative h-dvh w-full overflow-hidden"
 
-// 목록에서 장소를 고를 때 최소한 이 정도까지는 확대한다.
+// 한 지점을 겨냥할 때 — 목록에서 장소를 고르거나, 첫 화면을 최근 장소나 현재
+// 위치로 띄울 때 — 최소한 이 정도까지는 확대한다.
 const FOCUS_ZOOM = 14
 
 function toQuery(bounds: Bounds): string {
@@ -95,14 +97,21 @@ async function fetchPlaces(
 export function PlaceExplorer({
   initialPlaces,
   initialBounds,
+  initialCenter,
   isAuthenticated,
 }: {
   initialPlaces: Place[]
   initialBounds: Bounds
+  /** 가장 최근에 다녀온 장소. 첫 화면을 여기로 띄운다. 없으면 null. */
+  initialCenter: Coordinates | null
   isAuthenticated: boolean
 }) {
   const mapRef = useRef<MapRef>(null)
   const panelRef = useRef<HTMLElement>(null)
+  // 현재 위치는 한 세션에 한 번만 묻는다. 이 컴포넌트는 서버 액션 뒤의
+  // revalidatePath 로 새 prop 을 받아 다시 렌더되는데, 그때마다 물으면
+  // 사용자가 옮겨 둔 지도가 제자리로 튕겨 돌아간다.
+  const askedLocation = useRef(false)
   const [selected, setSelected] = useState<Place | null>(null)
   const [listOpen, setListOpen] = useState(false)
   const [listScope, setListScope] = useState<PlaceListScope>("all")
@@ -114,10 +123,14 @@ export function PlaceExplorer({
   const [deleting, setDeleting] = useState<Place | null>(null)
   const [deletePending, startDelete] = useTransition()
   const [editing, setEditing] = useState<Place | null>(null)
-  const [viewport, setViewport, viewportHydrated] = useLocalState<Viewport>(
-    "viewport",
-    DEFAULT_VIEWPORT
-  )
+  // 첫 화면 위치는 저장된 위치 → 최근 장소 → 현재 위치 → 기본 좌표 순으로
+  // 정해진다. 앞의 둘은 여기서 동기적으로 끝나고, 현재 위치만 아래 effect 가
+  // 비동기로 채운다.
+  const [viewport, setViewport, viewportHydrated, viewportRestored] =
+    useLocalState<Viewport>(
+      "viewport",
+      initialCenter ? { ...initialCenter, zoom: FOCUS_ZOOM } : DEFAULT_VIEWPORT
+    )
   const [bounds, setBounds] = useLocalState<Bounds>("bounds", initialBounds)
 
   // 옛 버전은 bounds 를 "[[lng,lat],[lng,lat]]" 문자열로 저장했다.
@@ -174,6 +187,43 @@ export function PlaceExplorer({
 
     return () => controller.abort()
   }, [isAuthenticated, reloadToken])
+
+  useEffect(() => {
+    // 저장된 위치도 다녀온 장소도 없을 때 — 즉 띄울 근거가 하나도 없을 때만 —
+    // 현재 위치를 묻는다. 권한 프롬프트는 사용자를 멈춰 세우므로 지도를 띄우기
+    // 전에 기다리지 않고, 답이 오면 그때 옮긴다. 거부하거나 실패하면 기본
+    // 좌표가 그대로 남는다.
+    //
+    // hydrated 이전에는 viewportRestored 가 아직 false 라서, 이 검사를 빼면
+    // 저장된 위치가 있는 사용자에게도 권한 프롬프트가 뜬다.
+    if (!viewportHydrated || viewportRestored || initialCenter) return
+    if (askedLocation.current || !navigator.geolocation) return
+
+    askedLocation.current = true
+    let cancelled = false
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        // 여기까지 오는 데 사용자의 권한 응답이 걸리므로 지도는 이미 떠 있다.
+        // 애니메이션 대신 jumpTo 를 쓰는 것은, 이것이 "이동"이 아니라 첫 화면을
+        // 정하는 일이기 때문이다. jumpTo 도 moveend 를 내보내므로 bounds 재조회는
+        // 그대로 걸린다.
+        if (cancelled) return
+        mapRef.current?.jumpTo({
+          center: [position.coords.longitude, position.coords.latitude],
+          zoom: FOCUS_ZOOM,
+        })
+      },
+      () => {
+        // 권한 거부나 측위 실패. 기본 좌표를 그대로 둔다.
+      },
+      { timeout: 10_000 }
+    )
+
+    return () => {
+      cancelled = true
+    }
+  }, [viewportHydrated, viewportRestored, initialCenter])
 
   const onMoveEnd = (e: ViewStateChangeEvent) => {
     const b = e.target.getBounds()
