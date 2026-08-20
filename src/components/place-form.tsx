@@ -375,7 +375,7 @@ export function PlaceForm({
       </Field>
 
       <Field>
-        <FieldLabel>
+        <FieldLabel id="category-label">
           카테고리{" "}
           <span className="text-muted-foreground font-normal">(선택)</span>
         </FieldLabel>
@@ -383,7 +383,11 @@ export function PlaceForm({
           control={control}
           name="category"
           render={({ field }) => (
-            <CategoryPicker value={field.value} onChange={field.onChange} />
+            <CategoryPicker
+              value={field.value}
+              onChange={field.onChange}
+              labelId="category-label"
+            />
           )}
         />
         <FieldError errors={[errors.category]} />

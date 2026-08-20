@@ -150,6 +150,11 @@ npx prisma db push     # 스키마를 DB에 반영
 npm run dev            # http://localhost:3000
 ```
 
+제목·카테고리 개편(별점 컬럼 삭제, `title` NOT NULL 추가, `category`를
+정수에서 enum으로 변경) 당시 `places`는 빈 테이블이어서 데이터 마이그레이션이
+없습니다. 이미 행이 있는 DB에 적용하려면 이 세 컬럼은 손으로 마이그레이션을
+작성해야 합니다.
+
 `src/generated/prisma`(Prisma Client)와 `public/maplibre`(maplibre 워커 청크)는
 둘 다 생성물이라 git에 없습니다. `npm install`의 postinstall이 만들고,
 `predev`·`prebuild`가 워커 복사본을 다시 맞춥니다. 스키마를 고친 뒤에는

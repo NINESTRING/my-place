@@ -65,8 +65,12 @@ const imagePath = z
  * 있었다.
  */
 const placeFields = {
+  // 카드·팝업·이미지 alt 가 모두 이 값을 쓴다. 공백만 있는 제목은 trim 을
+  // 거치지 않으면 min(1)을 통과해 버려서, 대체할 것이 없는 그 자리들에 빈
+  // 문자열이 그대로 찍힌다.
   title: z
     .string()
+    .trim()
     .min(1, "제목을 입력해 주세요")
     .max(60, "제목은 60자까지 쓸 수 있습니다"),
   /**
@@ -74,13 +78,17 @@ const placeFields = {
    * 있는지" 판정이 두 갈래가 되므로 경계에서 undefined 로 접는다. Prisma 는
    * undefined 를 "값 없음"으로 보고 nullable 컬럼에 NULL 을 넣는다.
    *
+   * trim 을 max 앞에 둔다 — 뒤에 두면 앞뒤 공백까지 글자 수에 들어가서, 500자
+   * 본문에 트레일링 개행 하나만 붙어도 거부된다.
+   *
    * transform 을 거쳐도 입력 타입과 출력 타입이 모두 `string | undefined` 라서
    * react-hook-form 이 이 스키마를 그대로 resolver 로 쓸 수 있다.
    */
   description: z
     .string()
+    .trim()
     .max(500, "설명은 500자까지 쓸 수 있습니다")
-    .transform((value) => value.trim() || undefined)
+    .transform((value) => value || undefined)
     .optional(),
   /**
    * 선택 값이다. 기본값을 두면 신경 쓰지 않은 장소가 전부 그 값으로

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { PlaceCategory } from "@/generated/prisma/enums"
-import { CATEGORIES, categoryLabel } from "@/lib/categories"
+import { CATEGORIES, categoryLabel, toCategory } from "@/lib/categories"
 
 describe("CATEGORIES", () => {
   it("enum 의 모든 항목에 라벨이 있다", () => {
@@ -25,5 +25,20 @@ describe("categoryLabel", () => {
     // 예전에는 "기타" 로 폴백해서, 고른 적 없는 카테고리가 카드에 라벨로
     // 찍혔다. 호출자가 자리를 비울 수 있어야 한다.
     expect(categoryLabel(null)).toBeNull()
+  })
+})
+
+describe("toCategory", () => {
+  it("빈 배열이면 해제(null)로 본다", () => {
+    // ToggleGroup 은 눌린 항목을 다시 누르면 빈 배열을 준다 — 이것이 해제다.
+    expect(toCategory([])).toBeNull()
+  })
+
+  it("정의된 카테고리 배열을 그 값으로 좁힌다", () => {
+    expect(toCategory(["SCENERY"])).toBe("SCENERY")
+  })
+
+  it("enum 에 없는 값은 null 로 본다", () => {
+    expect(toCategory(["ETC"])).toBeNull()
   })
 })

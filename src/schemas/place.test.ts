@@ -39,12 +39,27 @@ describe("placeInputSchema", () => {
     expect(result.success).toBe(false)
   })
 
+  it("공백만 있는 제목은 거부한다", () => {
+    // trim 전에 min(1)을 걸면 "   "가 통과해서, 카드·팝업·이미지 alt 에
+    // 쓸 것이 없는 빈 제목이 저장된다.
+    const result = placeInputSchema.safeParse({ ...validInput, title: "   " })
+    expect(result.success).toBe(false)
+  })
+
   it("제목이 60자를 넘으면 거부한다", () => {
     const result = placeInputSchema.safeParse({
       ...validInput,
       title: "가".repeat(61),
     })
     expect(result.success).toBe(false)
+  })
+
+  it("제목이 정확히 60자면 통과한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      title: "가".repeat(60),
+    })
+    expect(result.success).toBe(true)
   })
 
   it("설명은 없어도 통과한다", () => {
@@ -60,6 +75,16 @@ describe("placeInputSchema", () => {
     // "" 와 null 이 DB 에 섞이면 "설명이 있는지" 판정이 두 갈래가 된다.
     // Prisma 는 undefined 를 "값 없음"으로 보고 nullable 컬럼에 NULL 을 넣는다.
     const result = placeInputSchema.safeParse({ ...validInput, description: "   " })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.description).toBeUndefined()
+    }
+  })
+
+  it("빈 문자열 설명도 undefined 로 접는다", () => {
+    // 손대지 않은 Textarea 는 ""를 보낸다 — 위 공백만 있는 경우와 별개로
+    // 확인해 둔다.
+    const result = placeInputSchema.safeParse({ ...validInput, description: "" })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.description).toBeUndefined()
@@ -83,6 +108,27 @@ describe("placeInputSchema", () => {
       description: "가".repeat(501),
     })
     expect(result.success).toBe(false)
+  })
+
+  it("설명이 정확히 500자면 통과한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      description: "가".repeat(500),
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("500자 본문에 앞뒤 공백이 붙어도 통과한다", () => {
+    // trim 을 max 뒤에 두면 공백까지 글자 수에 들어가 501자가 되어 거부된다.
+    // trim 이 먼저 실행되어야 정확히 500자로 남는다.
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      description: `  ${"가".repeat(500)}\n`,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.description).toHaveLength(500)
+    }
   })
 
   it("정의된 카테고리를 통과시킨다", () => {

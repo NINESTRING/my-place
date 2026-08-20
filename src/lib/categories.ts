@@ -26,3 +26,13 @@ export type _CategoriesAreExhaustive = AssertNever<
 export function categoryLabel(value: PlaceCategory | null): string | null {
   return CATEGORIES.find((category) => category.value === value)?.label ?? null
 }
+
+/**
+ * multiple 이 false 인 ToggleGroup 은 눌린 항목을 다시 누르면 빈 배열을
+ * 준다. 그 빈 배열을 무시하면, 한 번 고른 카테고리를 해제할 방법이 없다 —
+ * 잘못 눌러도 되돌릴 수 없으면 선택 사항이 아니다. 목록에서 찾아 넘기므로
+ * 캐스팅 없이 PlaceCategory 로 좁혀진다.
+ */
+export function toCategory(next: readonly string[]): PlaceCategory | null {
+  return CATEGORIES.find((category) => category.value === next[0])?.value ?? null
+}
