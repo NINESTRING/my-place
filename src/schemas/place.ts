@@ -111,3 +111,26 @@ export type PlaceInput = z.infer<typeof placeInputSchema>
 export const placeFormSchema = z.object(placeFields)
 
 export type PlaceFormValues = z.infer<typeof placeFormSchema>
+
+/**
+ * 행 식별자. Place.id 는 `Int @default(autoincrement())` 이므로 양의 정수다.
+ *
+ * z.coerce 를 쓰지 않는 것이 의도적이다. 이 값은 클라이언트가 보내는 액션
+ * 인자이고, 강제 변환을 걸면 null·""·[] 이 전부 0 으로 접혀 들어온다.
+ */
+export const placeIdSchema = z.number().int().positive()
+
+/**
+ * 수정 액션의 입력. placeFields 를 그대로 확장하므로 등록과 수정의 검증
+ * 규칙이 갈라질 수 없다.
+ *
+ * 사진·좌표·촬영시각은 여기 없다. EXIF 가 준 사실 데이터이며, 사진을 바꾸면
+ * 좌표와 시각도 함께 바뀌므로 그것은 수정이 아니라 다른 장소다. z.object 가
+ * 모르는 키를 떨궈 주므로 클라이언트가 함께 보내도 무시된다.
+ */
+export const placeUpdateSchema = z.object({
+  id: placeIdSchema,
+  ...placeFields,
+})
+
+export type PlaceUpdateInput = z.infer<typeof placeUpdateSchema>

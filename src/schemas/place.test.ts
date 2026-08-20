@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { boundsQuerySchema, placeInputSchema } from "@/schemas/place"
+import {
+  boundsQuerySchema,
+  placeInputSchema,
+  placeUpdateSchema,
+} from "@/schemas/place"
 
 // 저장 경로의 앞 세그먼트는 소유자(Supabase auth 사용자 UUID)다.
 const OWNER = "11111111-2222-3333-4444-555555555555"
@@ -246,6 +250,93 @@ describe("placeInputSchema", () => {
     if (result.success) {
       expect(result.data.imageCreationTime).toBeInstanceOf(Date)
     }
+  })
+})
+
+describe("placeUpdateSchema", () => {
+  const validUpdate = {
+    id: 1,
+    title: "한강 야경",
+    description: "다리 조명이 켜지는 시간에 갔다",
+    category: "SCENERY",
+  }
+
+  it("올바른 입력을 통과시킨다", () => {
+    const result = placeUpdateSchema.safeParse(validUpdate)
+    expect(result.success).toBe(true)
+  })
+
+  it("id 가 0이면 거부한다", () => {
+    const result = placeUpdateSchema.safeParse({ ...validUpdate, id: 0 })
+    expect(result.success).toBe(false)
+  })
+
+  it("id 가 음수면 거부한다", () => {
+    const result = placeUpdateSchema.safeParse({ ...validUpdate, id: -1 })
+    expect(result.success).toBe(false)
+  })
+
+  it("id 가 소수면 거부한다", () => {
+    const result = placeUpdateSchema.safeParse({ ...validUpdate, id: 1.5 })
+    expect(result.success).toBe(false)
+  })
+
+  it("id 가 숫자 문자열이면 거부한다", () => {
+    // 액션 인자는 클라이언트가 보낸 값이다. 강제 변환을 걸어 두면 ""나 null
+    // 같은 값이 0으로 접혀 들어온다.
+    const result = placeUpdateSchema.safeParse({ ...validUpdate, id: "1" })
+    expect(result.success).toBe(false)
+  })
+
+  it("공백만 있는 제목은 거부한다", () => {
+    const result = placeUpdateSchema.safeParse({ ...validUpdate, title: "   " })
+    expect(result.success).toBe(false)
+  })
+
+  it("제목이 60자를 넘으면 거부한다", () => {
+    const result = placeUpdateSchema.safeParse({
+      ...validUpdate,
+      title: "가".repeat(61),
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("설명을 생략해도 통과한다", () => {
+    const { description: _description, ...withoutDescription } = validUpdate
+    const result = placeUpdateSchema.safeParse(withoutDescription)
+    expect(result.success).toBe(true)
+  })
+
+  it("빈 설명은 undefined 로 접힌다", () => {
+    const result = placeUpdateSchema.safeParse({
+      ...validUpdate,
+      description: "   ",
+    })
+    expect(result.success).toBe(true)
+    expect(result.data?.description).toBeUndefined()
+  })
+
+  it("카테고리가 null 이어도 통과한다", () => {
+    const result = placeUpdateSchema.safeParse({
+      ...validUpdate,
+      category: null,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("사진·좌표를 함께 보내도 결과에서 떨어져 나간다", () => {
+    // 수정으로 바꿀 수 있는 것은 사용자가 쓴 세 필드뿐이다. EXIF 에서 온
+    // 값들이 이 경로로 흘러들지 않는다는 것을 스키마가 보장한다.
+    const result = placeUpdateSchema.safeParse({
+      ...validUpdate,
+      image: "11111111-2222-3333-4444-555555555555/x.jpg",
+      latitude: 0,
+      longitude: 0,
+    })
+    expect(result.success).toBe(true)
+    expect(result.data).not.toHaveProperty("image")
+    expect(result.data).not.toHaveProperty("latitude")
+    expect(result.data).not.toHaveProperty("longitude")
   })
 })
 
