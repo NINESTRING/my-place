@@ -16,8 +16,8 @@ const MAX_PLACES = 50
  * 미인증 사용자는 이 함수를 호출하지 않고 빈 배열을 쓴다(app/page.tsx,
  * app/api/places/route.ts).
  *
- * 순수 헬퍼(clampRating, revivePlace)는 클라이언트 컴포넌트도 쓰므로
- * places.ts 에 남겨 두고, DB 를 만지는 이 조회만 server-only 로 갈라 둔다.
+ * 순수 헬퍼(revivePlace)는 클라이언트 컴포넌트도 쓰므로 places.ts 에
+ * 남겨 두고, DB 를 만지는 이 조회만 server-only 로 갈라 둔다.
  * Prisma 7 의 pg 드라이버 어댑터는 브라우저 번들에 들어갈 수 없다.
  */
 export async function getPlacesInBounds(
