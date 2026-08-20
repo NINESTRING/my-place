@@ -115,7 +115,9 @@ export const CATEGORIES = [
 export function categoryLabel(value: PlaceCategory | null): string | null
 ```
 
-`satisfies`로 enum 값과 라벨 맵의 누락을 컴파일 시점에 잡는다. `categoryLabel`은 `?? "기타"` 폴백을 버리고 미선택이면 `null`을 돌려준다 — 호출자가 라벨 자리를 비울 수 있어야 한다.
+`satisfies`는 enum에 없는 값을 적는 실수를 잡는다. 그 반대 방향 — enum에 항목을 추가하고 라벨을 빠뜨리는 것 — 은 `satisfies`가 잡지 못하므로 누락 시 컴파일이 깨지는 타입 단정을 함께 둔다(`Exclude<PlaceCategory, ...>`가 `never`인지 검사).
+
+`categoryLabel`은 `?? "기타"` 폴백을 버리고 미선택이면 `null`을 돌려준다 — 호출자가 라벨 자리를 비울 수 있어야 한다.
 
 ## 6. 폼 (`src/components/place-form.tsx`)
 
