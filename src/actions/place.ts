@@ -206,10 +206,17 @@ export async function deletePlaceAction(
   // 확인한 행에서 읽은 값이지만, 등록 시점 검증을 빠져나온 낡은 행이 있다면
   // 그 경로가 그대로 admin 클라이언트에 넘어간다. 한 줄로 막는다.
   if (isOwnedImagePath(place.image, userId)) {
-    const { error } = await supabaseAdmin.storage
-      .from(PLACES_BUCKET)
-      .remove([place.image])
-    if (error) {
+    try {
+      const { error } = await supabaseAdmin.storage
+        .from(PLACES_BUCKET)
+        .remove([place.image])
+      if (error) {
+        console.error("Storage 객체 삭제 실패", place.image, error)
+      }
+    } catch (error) {
+      // storage-js 는 StorageError 가 아닌 예외(네트워크 오류 등)는 그냥
+      // 던진다. 여기서 잡지 않으면 이미 지워진 DB 행을 두고 revalidatePath 와
+      // { ok: true } 를 건너뛰어, 실제로는 끝난 삭제를 실패로 보여주게 된다.
       console.error("Storage 객체 삭제 실패", place.image, error)
     }
   }

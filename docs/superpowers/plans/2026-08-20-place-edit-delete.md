@@ -916,16 +916,24 @@ export function EditPlaceDialog({
     if (!place) return
 
     setSaving(true)
-    const result = await updatePlaceAction({ id: place.id, ...values })
-    setSaving(false)
+    try {
+      const result = await updatePlaceAction({ id: place.id, ...values })
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
 
-    if (!result.ok) {
-      toast.error(result.error)
-      return
+      toast.success("장소를 수정했습니다.")
+      onUpdated(place.id, values)
+    } catch {
+      // 서버 액션은 reject 로도 실패할 수 있다(네트워크 끊김, 배포 중 500 등).
+      // try 로 감싸지 않으면 아래 finally 도 못 돌고 saving 이 true 에 갇혀
+      // 모달이 영영 잠긴다 — 제출·취소 버튼 모두 disabled, Esc·바깥 클릭도
+      // onOpenChange 의 saving 가드가 막는다.
+      toast.error("수정 중 문제가 발생했습니다.")
+    } finally {
+      setSaving(false)
     }
-
-    toast.success("장소를 수정했습니다.")
-    onUpdated(place.id, values)
   }
 
   return (

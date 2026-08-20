@@ -220,19 +220,26 @@ export function PlaceExplorer({
     if (!target) return
 
     startDelete(async () => {
-      const result = await deletePlaceAction(target.id)
-      if (!result.ok) {
-        toast.error(result.error)
-        return
-      }
+      try {
+        const result = await deletePlaceAction(target.id)
+        if (!result.ok) {
+          toast.error(result.error)
+          return
+        }
 
-      setDeleting(null)
-      // 지운 장소의 팝업이 떠 있으면 참조가 사라진 카드가 지도에 남는다.
-      setSelected((prev) => (prev?.id === target.id ? null : prev))
-      // 이 화면의 목록은 RSC 가 아니라 /api/places 로 가져오므로
-      // revalidatePath 로는 갱신되지 않는다. 토큰을 올려 다시 부른다.
-      setReloadToken((n) => n + 1)
-      toast.success("장소를 삭제했습니다.")
+        setDeleting(null)
+        // 지운 장소의 팝업이 떠 있으면 참조가 사라진 카드가 지도에 남는다.
+        setSelected((prev) => (prev?.id === target.id ? null : prev))
+        // 이 화면의 목록은 RSC 가 아니라 /api/places 로 가져오므로
+        // revalidatePath 로는 갱신되지 않는다. 토큰을 올려 다시 부른다.
+        setReloadToken((n) => n + 1)
+        toast.success("장소를 삭제했습니다.")
+      } catch {
+        // useTransition 은 reject 해도 isPending 을 풀어 주므로 모달이
+        // 잠기지는 않는다. 하지만 감싸지 않으면 사용자는 아무 안내도 없이
+        // 그냥 실패를 겪는다.
+        toast.error("삭제 중 문제가 발생했습니다.")
+      }
     })
   }
 
