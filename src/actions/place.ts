@@ -182,10 +182,16 @@ export async function deletePlaceAction(
 
   // 지울 사진 경로를 알아야 하므로 한 번 읽는다. 여기서도 소유자 조건을
   // where 에 넣어 남의 행이 조회되지 않게 한다.
-  const place = await prisma.place.findFirst({
-    where: { id, userId },
-    select: { image: true },
-  })
+  let place: { image: string } | null
+  try {
+    place = await prisma.place.findFirst({
+      where: { id, userId },
+      select: { image: true },
+    })
+  } catch {
+    return { ok: false, error: "삭제에 실패했습니다" }
+  }
+
   if (!place) {
     return { ok: false, error: NOT_FOUND }
   }
