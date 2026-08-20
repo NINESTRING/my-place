@@ -86,14 +86,15 @@ Next.js 인증 가이드도 같은 방향을 지시한다 — proxy는 낙관적
 
 ### 4.3 인가 seam — `src/lib/auth.ts`
 
-이 파일이 원래 의도대로 인증의 유일한 지점이 된다.
+이 파일이 원래 의도대로 인증의 유일한 지점이 된다. 내보내는 것은 함수 하나다.
 
 ```ts
-getCurrentUserId(): Promise<string | null>   // 읽기 경로. React cache() 로 요청당 1회
-requireUserId(): Promise<string>              // 쓰기 경로. 세션 없으면 throw
+getCurrentUserId(): Promise<string | null>   // React cache() 로 요청당 1회
 ```
 
 반환형이 `Promise<string>`에서 `Promise<string | null>`로 바뀌는 것은 **의도된 파괴적 변경**이다. 타입 체커가 모든 호출부에서 "로그인 안 된 경우"를 처리하도록 강제한다.
+
+> **구현 중 변경.** 초안에는 쓰기 경로용으로 세션이 없으면 throw 하는 `requireUserId()`가 함께 있었다. 실제로 써 보니 두 쓰기 액션이 모두 `ActionResult`로 실패를 표현하므로, 던진 예외를 그 자리에서 잡아 다시 `ActionResult`로 바꾸는 try/catch 가 액션마다 붙었다. 실패 표현이 두 개(예외와 반환값)가 되면서 코드만 늘고 얻는 것이 없었다. `getCurrentUserId()`의 반환형에 이미 `null`이 있어 타입 체커가 검사를 강제하므로 안전성도 동일하다. `requireUserId()`와 `UnauthenticatedError`를 없애고 호출부에서 `null` 검사만 한다.
 
 `getClaims()`의 `sub` 클레임이 사용자 id이며 Supabase auth의 UUID다. `Place.userId`가 이미 `String`이므로 스키마 변경이 없다.
 
@@ -208,8 +209,10 @@ RLS `enable`은 그대로 둔다 — 나중에 Data API를 열 때의 안전망�
 | `src/lib/supabase/browser.ts` | 브라우저 클라이언트 |
 | `src/lib/supabase/server.ts` | 쿠키 바인딩 서버 클라이언트 |
 | `src/components/login-dialog.tsx` | 로그인 모달 |
+| `src/components/auth-error-toast.tsx` | 콜백 실패 토스트 + 주소창 정리 |
 | `src/actions/auth.ts` | `signOutAction` |
-| `supabase/migrations/20260820000000_drop_stub_user_places.sql` | 스텁 데이터 삭제 |
+| `supabase/migrations/20260820000000_drop_stub_user_places.sql` | 스텁 행 삭제 |
+| `scripts/purge-stub-storage.mjs` | 스텁 Storage 객체 삭제 (1회성) |
 
 ### 이동
 
@@ -227,6 +230,10 @@ RLS `enable`은 그대로 둔다 — 나중에 Data API를 열 때의 안전망�
 | `app/page.tsx` | 세션 확인, `isAuthenticated` 전달 |
 | `app/api/places/route.ts` | 미인증이면 `[]` |
 | `src/components/place-explorer.tsx` | 로그인 버튼, 게이팅, 모달 |
+| `src/types/env.d.ts` | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` 선언 |
+| `src/lib/images.test.ts`, `src/schemas/place.test.ts` | 새 경로 형식 반영 |
+
+`src/components/place-form.tsx`는 수정하지 않는다. 액션의 `ActionResult.error`를 이미 토스트로 띄우고 있어, 모달을 열어 둔 채 세션이 만료된 경우에도 "로그인이 필요합니다"가 그대로 표시된다.
 
 ## 10. 의존성 · 환경 변수
 
@@ -252,12 +259,20 @@ publishable 키를 쓴다. legacy `anon` 키는 호환용이며 신규 코드에
 
 `userId = '1'` 행과 그 Storage 객체를 삭제한다. 되돌릴 수 없다.
 
+**DB 행은 마이그레이션으로, Storage 파일은 Storage API 로 지운다.** 초안은 둘 다 SQL 한 파일에 넣으려 했지만 `storage.objects`를 SQL 로 지우면 메타데이터 행만 사라지고 실제 파일은 백엔드에 남아 접근 불가 상태로 방치된다. 그래서 갈랐다.
+
 ```sql
-delete from storage.objects where bucket_id = 'places';
+-- supabase/migrations/20260820000000_drop_stub_user_places.sql
 delete from public.places where user_id = '1';
 ```
 
-Storage 객체를 버킷 전체로 지우는 것이 안전하다. 이 시점에 `places` 버킷의 모든 객체는 정의상 스텁 사용자의 것이다(인증이 없었으므로 다른 사용자가 존재할 수 없다).
+```bash
+node --env-file=.env scripts/purge-stub-storage.mjs
+```
+
+스크립트는 버킷 **루트**의 객체만 지운다. 인증 이후의 경로는 모두 `<userId>/<uuid>.<ext>`이므로 루트에 직접 놓인 객체는 정의상 스텁 시절의 것이다. 따라서 나중에 다시 실행해도 실제 사용자의 사진을 건드리지 않는다.
+
+실행 결과: `places` 3행, Storage 객체 3개 삭제. 삭제 시점의 `auth.users`는 0행이었으므로 실제 사용자 데이터는 존재하지 않았다.
 
 ## 12. 테스트와 완료 기준
 
@@ -283,10 +298,22 @@ Storage 객체를 버킷 전체로 지우는 것이 안전하다. 이 시점에 
 
 ### 완료 기준
 
-- `npm test` 통과
+- `npm test` 통과 — 59 tests
 - `npx tsc --noEmit` 통과
-- `npm run build` 통과
+- `npm run build` 통과 (`ƒ Proxy (Middleware)` 로 `proxy.ts` 인식 확인)
 - 실행 검증 1–7 통과
+
+### 자동 검증한 범위
+
+dev 서버에 직접 요청해 확인한 것:
+
+- `GET /api/places?...` (세션 없음) → `{"places":[]}`
+- `GET /auth/callback` (code 없음) → 307 `/?auth_error=1`
+- `GET /auth/callback?code=bogus` → 307 `/?auth_error=1`
+- `GET /` (세션 없음) → 마커 0개, `isAuthenticated: false`, `aria-label="로그인"` 존재, 등록·목록 버튼은 `disabled` 아님
+- 서버 로그에 `proxy.ts` 실행 기록, 에러 없음
+
+**세션이 있는 경로는 자동 검증하지 못했다.** Google 로그인을 통과해야 하므로 브라우저에서 사람이 확인해야 한다. 위 실행 검증 목록의 4–7번이 그에 해당한다.
 
 ## 13. 작업 순서
 

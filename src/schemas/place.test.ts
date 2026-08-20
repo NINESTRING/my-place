@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest"
 import { boundsQuerySchema, placeInputSchema } from "@/schemas/place"
 
+// 저장 경로의 앞 세그먼트는 소유자(Supabase auth 사용자 UUID)다.
+const OWNER = "11111111-2222-3333-4444-555555555555"
+const OBJECT = "0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061"
+
 const validInput = {
   description: "한강 야경",
-  image: "0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061.jpg",
+  image: `${OWNER}/${OBJECT}.jpg`,
   imageCreationTime: new Date("2026-01-01T00:00:00.000Z"),
   latitude: 37.65874,
   longitude: 126.97759,
@@ -50,10 +54,10 @@ describe("placeInputSchema", () => {
     ).toBe(false)
   })
 
-  it("uuid 형식의 storage path 를 통과시킨다", () => {
+  it("소유자 폴더가 붙은 storage path 를 통과시킨다", () => {
     const result = placeInputSchema.safeParse({
       ...validInput,
-      image: "0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061.webp",
+      image: `${OWNER}/${OBJECT}.webp`,
     })
     expect(result.success).toBe(true)
   })
@@ -61,9 +65,33 @@ describe("placeInputSchema", () => {
   it("png 확장자를 통과시킨다", () => {
     const result = placeInputSchema.safeParse({
       ...validInput,
-      image: "0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061.png",
+      image: `${OWNER}/${OBJECT}.png`,
     })
     expect(result.success).toBe(true)
+  })
+
+  it("소유자 폴더가 없는 옛 형식을 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      image: `${OBJECT}.jpg`,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("소유자 폴더가 uuid 가 아니면 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      image: `sub/${OBJECT}.jpg`,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("세그먼트가 셋 이상인 경로를 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      image: `${OWNER}/${OWNER}/${OBJECT}.jpg`,
+    })
+    expect(result.success).toBe(false)
   })
 
   it("전체 URL 을 image 로 거부한다", () => {
@@ -78,7 +106,7 @@ describe("placeInputSchema", () => {
   it("허용하지 않는 확장자를 거부한다", () => {
     const result = placeInputSchema.safeParse({
       ...validInput,
-      image: "0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061.heic",
+      image: `${OWNER}/${OBJECT}.heic`,
     })
     expect(result.success).toBe(false)
   })
@@ -86,7 +114,7 @@ describe("placeInputSchema", () => {
   it("uuid 형식이 아닌 파일명을 거부한다", () => {
     const result = placeInputSchema.safeParse({
       ...validInput,
-      image: "not-a-uuid.jpg",
+      image: `${OWNER}/not-a-uuid.jpg`,
     })
     expect(result.success).toBe(false)
   })
@@ -94,15 +122,7 @@ describe("placeInputSchema", () => {
   it("경로 이탈 시도를 거부한다", () => {
     const result = placeInputSchema.safeParse({
       ...validInput,
-      image: "../../etc/passwd.jpg",
-    })
-    expect(result.success).toBe(false)
-  })
-
-  it("하위 폴더를 포함한 경로를 거부한다", () => {
-    const result = placeInputSchema.safeParse({
-      ...validInput,
-      image: "sub/0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061.jpg",
+      image: `${OWNER}/../../etc/passwd.jpg`,
     })
     expect(result.success).toBe(false)
   })

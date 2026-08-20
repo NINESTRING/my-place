@@ -39,15 +39,22 @@ export const boundsQuerySchema = z
     ne: { latitude: q.neLat, longitude: q.neLng },
   }))
 
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
 /**
- * 저장 경로는 서버 액션이 crypto.randomUUID() 로 정하므로 형식이 고정되어
- * 있다. 이 정규식은 클라이언트가 보낸 값이 그 형식임을 확인해 경로 이탈이나
- * 임의 객체 참조를 막는다. 하위 폴더는 쓰지 않는다.
+ * 저장 경로는 서버 액션이 정하므로 형식이 고정되어 있다: `<userId>/<uuid>.<ext>`.
+ * 이 정규식은 클라이언트가 보낸 값이 그 형식임을 확인해 경로 이탈이나 임의
+ * 객체 참조를 막는다.
+ *
+ * 앞 세그먼트가 소유자(Supabase auth 사용자 UUID)이며, 형식 검사만으로는
+ * "누구의 것인지"까지 알 수 없다. 그 대조는 createPlaceAction 이
+ * isOwnedImagePath() 로 세션의 userId 와 비교해서 한다. 여기서는 UUID 두 개
+ * 구조라는 것만 보장한다.
  */
 const imagePath = z
   .string()
   .regex(
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/,
+    new RegExp(`^${UUID}/${UUID}\\.(jpg|png|webp)$`),
     "이미지 경로가 올바르지 않습니다"
   )
 
