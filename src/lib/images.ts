@@ -35,3 +35,60 @@ const EXTENSIONS = new Map([
 export function storageExtension(contentType: string): string | null {
   return EXTENSIONS.get(contentType) ?? null
 }
+
+/**
+ * 업로드를 받아 주는 MIME 목록. 파일 선택 창의 `accept` 와 드롭 존의 필터가
+ * 이 하나를 함께 쓴다 — 두 경로가 서로 다른 목록을 들고 갈라지면 파일 선택
+ * 창에서는 막히는 사진이 드롭으로는 통과한다.
+ */
+export const ACCEPTED_IMAGE_TYPES = [...EXTENSIONS.keys()]
+
+/**
+ * 드롭된 목록에서 받아들일 수 있는 첫 사진을 고른다. 없으면 null.
+ *
+ * 드롭은 파일 선택 창과 달리 `accept` 로 걸러지지 않는다. 사용자가 무엇이든
+ * 끌어다 놓을 수 있으므로 — 여러 장, 텍스트 파일, 폴더(type 이 "" 로 온다),
+ * 다른 탭에서 끌어온 이미지(파일이 아예 없다) — 목록을 직접 훑는다.
+ *
+ * FileList 를 그대로 넘길 수 있도록 ArrayLike 를 받는다. node 테스트 환경에는
+ * DataTransfer 가 없어서 배열로 검증한다.
+ */
+export function pickImageFile(files: ArrayLike<File>): File | null {
+  return (
+    Array.from(files).find((file) => storageExtension(file.type) !== null) ??
+    null
+  )
+}
+
+/**
+ * Storage 객체 경로의 소유자 폴더 구분자. 경로는 `<userId>/<uuid>.<ext>` 다.
+ *
+ * 소유자를 경로에 박아 두는 것이 이 앱의 업로드 인가 방식이다. 서명 업로드
+ * URL 의 경로와 나중에 제출되는 경로가 서로 바인딩되지 않는다는 문제가
+ * 있었는데(actions/place.ts 참고), 경로 자체가 소유자를 증언하게 만들면
+ * 제출된 값의 접두사만 검사해서 소유권을 확인할 수 있다. 별도 테이블이나
+ * 토큰 대조가 필요 없다.
+ */
+export function userScopedImagePath(
+  userId: string,
+  extension: string
+): string {
+  return `${userId}/${crypto.randomUUID()}.${extension}`
+}
+
+/**
+ * 경로가 이 사용자의 것인지 확인한다.
+ *
+ * startsWith(`${userId}/`) 만으로도 접두사 혼동(`abc` 가 `abcd/...` 를
+ * 통과하는 문제)은 막히지만, 세그먼트를 직접 쪼개 정확히 2개인지까지 본다.
+ * `a/b/c` 처럼 하위 폴더를 더 파거나 `a/` 처럼 파일명이 빈 경로를 함께
+ * 거른다. 경로 이탈(`..`)은 세그먼트 개수와 userId 일치 조건에서 걸린다.
+ */
+export function isOwnedImagePath(path: string, userId: string): boolean {
+  if (!userId) return false
+
+  const segments = path.split("/")
+  return (
+    segments.length === 2 && segments[0] === userId && segments[1].length > 0
+  )
+}

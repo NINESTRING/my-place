@@ -15,9 +15,9 @@ import "maplibre-gl/dist/maplibre-gl.css"
 import { setWorkerUrl } from "maplibre-gl"
 
 import type { Place } from "@/generated/prisma/client"
-import { ListIcon, MapPinPlusIcon } from "lucide-react"
+import { ListIcon, LogInIcon, LogOutIcon, MapPinPlusIcon } from "lucide-react"
 import Image from "next/image"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import Map, {
   Marker,
   Popup,
@@ -25,8 +25,11 @@ import Map, {
   type ViewStateChangeEvent,
 } from "react-map-gl/maplibre"
 import { useDebounce } from "use-debounce"
+import { signOutAction } from "@/actions/auth"
 import { CreatePlaceDialog } from "@/components/create-place-dialog"
+import { LoginDialog, type LoginReason } from "@/components/login-dialog"
 import { PlaceListPanel } from "@/components/place-list-panel"
+import { SignOutDialog } from "@/components/sign-out-dialog"
 import { Button } from "@/components/ui/button"
 import { useLastData } from "@/hooks/use-last-data"
 import { useLocalState } from "@/hooks/use-local-state"
@@ -65,15 +68,21 @@ function toQuery(bounds: Bounds): string {
 export function PlaceExplorer({
   initialPlaces,
   initialBounds,
+  isAuthenticated,
 }: {
   initialPlaces: Place[]
   initialBounds: Bounds
+  isAuthenticated: boolean
 }) {
   const mapRef = useRef<MapRef>(null)
   const panelRef = useRef<HTMLElement>(null)
   const [selected, setSelected] = useState<Place | null>(null)
   const [listOpen, setListOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [loginReason, setLoginReason] = useState<LoginReason>(null)
+  const [loginOpen, setLoginOpen] = useState(false)
+  const [signOutOpen, setSignOutOpen] = useState(false)
+  const [signingOut, startSignOut] = useTransition()
   const [viewport, setViewport, viewportHydrated] = useLocalState<Viewport>(
     "viewport",
     DEFAULT_VIEWPORT
@@ -169,6 +178,35 @@ export function PlaceExplorer({
     flyTo(place)
   }
 
+  /**
+   * 로그인이 필요한 동작을 감싼다. 미인증이면 왜 막혔는지를 담아 로그인
+   * 모달을 연다.
+   *
+   * 등록·목록 버튼을 disabled 로 두지 않는 것이 의도적이다. 비활성 버튼은
+   * 눌리지 않으므로 왜 쓸 수 없는지 설명할 기회가 없다.
+   */
+  const gated = (reason: Exclude<LoginReason, null>, run: () => void) => {
+    if (isAuthenticated) {
+      run()
+      return
+    }
+    setLoginReason(reason)
+    setLoginOpen(true)
+  }
+
+  const onSignOutConfirmed = () => {
+    startSignOut(async () => {
+      await signOutAction()
+      // 서버 액션이 revalidatePath 로 RSC 를 무효화하지만, 이 컴포넌트의
+      // places 는 useState 초기값이라 prop 이 바뀌어도 갱신되지 않는다.
+      // /api/places 를 다시 부르게 해서 빈 목록을 받아 온다.
+      setSelected(null)
+      setListOpen(false)
+      setReloadToken((n) => n + 1)
+      setSignOutOpen(false)
+    })
+  }
+
   return (
     <div className={SHELL_CLASS}>
       {/* Map의 initialViewState는 마운트 시점에 한 번만 적용되고 이후로는
@@ -206,11 +244,11 @@ export function PlaceExplorer({
               maxWidth="260px"
             >
               <div className="space-y-2">
-                <p className="font-medium">{selected.description}</p>
+                <p className="font-medium">{selected.title}</p>
                 <div className="relative aspect-square w-full overflow-hidden rounded">
                   <Image
                     src={publicImageUrl(selected.image)}
-                    alt={selected.description}
+                    alt={selected.title}
                     fill
                     sizes="260px"
                     className="object-cover"
@@ -229,7 +267,7 @@ export function PlaceExplorer({
           겹치지 않는다. */}
       <div className="absolute top-4 right-4 z-30 flex flex-col gap-2">
         <Button
-          onClick={() => setCreateOpen(true)}
+          onClick={() => gated("create", () => setCreateOpen(true))}
           aria-label="장소 등록"
           className="size-11 rounded-full shadow-lg"
         >
@@ -237,13 +275,36 @@ export function PlaceExplorer({
         </Button>
         <Button
           variant="outline"
-          onClick={() => setListOpen((open) => !open)}
+          onClick={() => gated("list", () => setListOpen((open) => !open))}
           aria-label="장소 목록"
           aria-pressed={listOpen}
           className="size-11 rounded-full shadow-lg"
         >
           <ListIcon className="size-5" />
         </Button>
+
+        {isAuthenticated ? (
+          <Button
+            variant="outline"
+            onClick={() => setSignOutOpen(true)}
+            aria-label="로그아웃"
+            className="size-11 rounded-full shadow-lg"
+          >
+            <LogOutIcon className="size-5" />
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setLoginReason(null)
+              setLoginOpen(true)
+            }}
+            aria-label="로그인"
+            className="size-11 rounded-full shadow-lg"
+          >
+            <LogInIcon className="size-5" />
+          </Button>
+        )}
       </div>
 
       <PlaceListPanel
@@ -259,6 +320,24 @@ export function PlaceExplorer({
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={onCreated}
+      />
+
+      <LoginDialog
+        open={loginOpen}
+        onOpenChange={setLoginOpen}
+        reason={loginReason}
+      />
+
+      <SignOutDialog
+        open={signOutOpen}
+        // 로그아웃 진행 중에는 바깥 클릭·Esc 로 닫히지 않게 한다. 닫혀도
+        // 액션은 계속 진행되므로 "취소한 것처럼 보이는데 로그아웃되는" 상태가
+        // 생긴다.
+        onOpenChange={(next) => {
+          if (!signingOut) setSignOutOpen(next)
+        }}
+        onConfirm={onSignOutConfirmed}
+        pending={signingOut}
       />
     </div>
   )

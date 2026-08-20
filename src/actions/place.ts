@@ -1,32 +1,37 @@
 "use server"
 
 /**
- * 주의: 이 액션들에는 인가 검사가 없다. 인증은 이번 마이그레이션의 명시적
- * 비목표이며, userId 는 src/lib/auth.ts 의 getCurrentUserId() 가 반환하는
- * 고정값 "1" 이다. 인증을 붙일 때 그 함수 하나만 실제 구현으로 바꾸면
- * 모든 쓰기 경로에 적용된다.
+ * 쓰기 경로의 인가는 두 겹이다.
  *
- * 단, 이 서술은 userId 주입에만 참이다. createUploadUrlAction 이 발급한
- * 서명 URL 의 path 와 createPlaceAction 에 제출되는 path 는 서로 바인딩되지
- * 않는다 — 클라이언트가 A 경로로 서명 URL 을 받고 업로드하지 않은 채 다른
- * well-formed 경로를 제출해도 지금은 통과한다. 인증이 없는 지금은 "이미
- * 공개된 이미지를 가리키는 행" 정도로 결과가 국한되지만, getCurrentUserId()
- * 를 실제 구현으로 바꾸는 순간 이것은 인가 버그가 된다(사용자 A 가 사용자
- * B 의 이미지를 자기 행에 붙일 수 있음). 인증을 붙일 때 path 바인딩(예:
- * 서명 URL 발급 시 userId 를 경로/토큰에 묶고 저장 시 검증)을 함께 구현해야
- * 한다.
+ * 1. 세션 — getCurrentUserId() 가 null 이면 아무것도 하지 않는다. userId 는
+ *    Supabase auth 가 서명을 검증한 JWT 의 sub 이며 클라이언트가 보낸 값이
+ *    아니다.
+ * 2. 경로 소유권 — 저장 경로가 `<userId>/<uuid>.<ext>` 라서 제출된 image 값의
+ *    앞 세그먼트를 세션의 userId 와 대조하면 소유권이 증명된다.
+ *
+ * 2번이 필요한 이유는 서명 URL 발급과 행 생성이 서로 다른 요청이기 때문이다.
+ * 클라이언트가 A 경로로 서명 URL 을 받고 실제로는 다른 well-formed 경로를
+ * 제출할 수 있다. 인증이 없던 시절에는 결과가 "이미 공개된 이미지를 가리키는
+ * 행" 정도였지만, 이제는 사용자 A 가 사용자 B 의 사진을 자기 장소에 붙이는
+ * 인가 버그가 된다. 경로에 소유자를 박아 그 창을 닫는다.
  */
 
 import { revalidatePath } from "next/cache"
 import { getCurrentUserId } from "@/lib/auth"
-import { storageExtension } from "@/lib/images"
+import {
+  isOwnedImagePath,
+  storageExtension,
+  userScopedImagePath,
+} from "@/lib/images"
 import { prisma } from "@/lib/prisma"
-import { PLACES_BUCKET, supabaseAdmin } from "@/lib/supabase"
+import { PLACES_BUCKET, supabaseAdmin } from "@/lib/supabase/admin"
 import { placeInputSchema } from "@/schemas/place"
 
 export type ActionResult<T> =
   | ({ ok: true } & T)
   | { ok: false; error: string }
+
+const UNAUTHENTICATED = "로그인이 필요합니다"
 
 /**
  * 브라우저가 Storage 에 직접 올릴 수 있는 서명 URL 을 발급한다.
@@ -38,6 +43,11 @@ export type ActionResult<T> =
 export async function createUploadUrlAction(
   contentType: string
 ): Promise<ActionResult<{ signedUrl: string; path: string }>> {
+  const userId = await getCurrentUserId()
+  if (!userId) {
+    return { ok: false, error: UNAUTHENTICATED }
+  }
+
   const extension = storageExtension(contentType)
   if (!extension) {
     return { ok: false, error: "JPEG, PNG, WebP 이미지만 올릴 수 있습니다" }
@@ -45,7 +55,7 @@ export async function createUploadUrlAction(
 
   const { data, error } = await supabaseAdmin.storage
     .from(PLACES_BUCKET)
-    .createSignedUploadUrl(`${crypto.randomUUID()}.${extension}`)
+    .createSignedUploadUrl(userScopedImagePath(userId, extension))
 
   if (error || !data) {
     return { ok: false, error: "업로드 URL 발급에 실패했습니다" }
@@ -57,12 +67,21 @@ export async function createUploadUrlAction(
 export async function createPlaceAction(
   input: unknown
 ): Promise<ActionResult<{ id: number }>> {
+  const userId = await getCurrentUserId()
+  if (!userId) {
+    return { ok: false, error: UNAUTHENTICATED }
+  }
+
   const parsed = placeInputSchema.safeParse(input)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "입력이 올바르지 않습니다" }
   }
 
-  const userId = await getCurrentUserId()
+  // 스키마는 경로가 `<uuid>/<uuid>.<ext>` 형식인지만 본다. 그 앞 세그먼트가
+  // *이* 사용자인지는 세션을 알아야 판단할 수 있으므로 여기서 대조한다.
+  if (!isOwnedImagePath(parsed.data.image, userId)) {
+    return { ok: false, error: "이미지 경로가 올바르지 않습니다" }
+  }
 
   try {
     const place = await prisma.place.create({

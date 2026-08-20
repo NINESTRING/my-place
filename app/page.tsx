@@ -1,4 +1,6 @@
+import { AuthErrorToast } from "@/components/auth-error-toast"
 import { PlaceExplorer } from "@/components/place-explorer"
+import { getCurrentUserId } from "@/lib/auth"
 import { getPlacesInBounds } from "@/lib/places.server"
 import type { Bounds } from "@/schemas/place"
 
@@ -16,12 +18,20 @@ const INITIAL_BOUNDS: Bounds = {
 }
 
 export default async function HomePage() {
-  const places = await getPlacesInBounds(INITIAL_BOUNDS)
+  // 로그인하지 않았으면 조회 자체를 하지 않는다. 이 앱의 장소는 등록한
+  // 사람에게만 보이므로 미인증 사용자에게는 마커 없는 지도가 정상 화면이다.
+  const userId = await getCurrentUserId()
+  const places = userId ? await getPlacesInBounds(INITIAL_BOUNDS, userId) : []
 
   return (
     <main>
       <h1 className="sr-only">my-place — 다녀온 장소 지도</h1>
-      <PlaceExplorer initialPlaces={places} initialBounds={INITIAL_BOUNDS} />
+      <AuthErrorToast />
+      <PlaceExplorer
+        initialPlaces={places}
+        initialBounds={INITIAL_BOUNDS}
+        isAuthenticated={userId !== null}
+      />
     </main>
   )
 }

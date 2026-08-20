@@ -14,7 +14,7 @@
 | 요소 | 조작 | 설명 |
 | --- | --- | --- |
 | 지도 | — | 화면에 보이는 영역(bounds) 안의 장소만 조회해 마커로 표시, 마커 클릭 시 사진 팝업 |
-| 등록 | 오른쪽 위 `MapPinPlus` 아이콘 | 모달로 등록 폼을 띄운다. 사진 업로드 → EXIF 파싱 → 폼 안 지도에 촬영 위치 표시 → 설명/별점/카테고리 입력 후 저장. 저장하면 모달이 닫히고 지도가 그 좌표로 날아간다 |
+| 등록 | 오른쪽 위 `MapPinPlus` 아이콘 | 모달로 등록 폼을 띄운다. 사진 업로드 → EXIF 파싱 → 폼 안 지도에 촬영 위치 표시 → 제목·설명(선택)·카테고리(선택) 입력 후 저장. 저장하면 모달이 닫히고 지도가 그 좌표로 날아간다 |
 | 목록 | 오른쪽 위 `List` 아이콘 | 왼쪽에서 패널이 밀려 들어온다. **지도를 다 덮지 않으며**(`w-[min(22rem,82vw)]`) 열려 있는 동안에도 지도를 그대로 조작할 수 있다. 카드를 누르면 그 장소로 이동한다 |
 
 - **지도와 목록이 같은 조회를 공유** — 목록에 나오는 것은 "지금 지도에 보이는
@@ -23,7 +23,7 @@
 - **EXIF 기반 자동 위치 인식** — `exifr`로 사진에서 위경도·촬영일시를 읽고, 정보가 없는 사진은 등록을 거부합니다.
 - **뷰포트 기반 조회** — 지도를 움직이면 현재 bounds를 디바운스(`use-debounce`) 후 `GET /api/places`로 재조회합니다. 지도 위치/영역은 localStorage에 저장되어 새로고침해도 유지됩니다.
 - **이미지 업로드** — 서버 액션(`createUploadUrlAction`)이 Supabase Storage 서명 업로드 URL을 발급하고, 브라우저가 그 URL로 직접 올립니다. 브라우저에 Supabase 키가 나가지 않습니다.
-- **별점 / 카테고리 선택** — 커스텀 별점 컴포넌트와 shadcn `ToggleGroup` 기반 카테고리 선택.
+- **카테고리 선택** — `ToggleGroup` 기반 5지선다(카페·식당·숙소·명소·풍경)이며 선택 사항입니다. 같은 항목을 다시 누르면 해제됩니다. 값은 Prisma enum `PlaceCategory` 이고 미선택은 `null` 입니다.
 - **업로드 영역 Lottie 애니메이션** — 페이지 전환 애니메이션은 없습니다(아래 기술 스택의 안내 참고).
 
 ## 기술 스택
@@ -90,7 +90,7 @@ Route Handler(GET)를 쓰는데, 서버 액션은 POST 전용이고 순차 실�
 
 ### 데이터 모델
 
-`places` 테이블 (Prisma `Place`) — `userId`(인덱스), `image`, `imageCreationTime`, `latitude`, `longitude`, `description`, `rating`, `category`, `createdAt`, `updatedAt`.
+`places` 테이블 (Prisma `Place`) — `userId`(인덱스), `image`, `imageCreationTime`, `latitude`, `longitude`, `title`, `description`(nullable), `category`(`PlaceCategory` enum, nullable), `createdAt`, `updatedAt`.
 
 ## 디렉터리 구조
 
@@ -107,7 +107,7 @@ src/
   lib/         prisma, places(순수 헬퍼), places.server(DB 조회), images,
                supabase, auth, categories, utils(cn)
   components/  PlaceExplorer(화면 전체), PlaceListPanel, CreatePlaceDialog,
-               PlaceCard, PlaceForm, StarRating, CategoryPicker
+               PlaceCard, PlaceForm, CategoryPicker
   components/ui/  shadcn 생성물 (Field 기반 폼 프리미티브 포함, form.tsx 없음)
   hooks/       useLocalState, useLastData
   assets/      Lottie 애니메이션 JSON
@@ -149,6 +149,11 @@ npx prisma db push     # 스키마를 DB에 반영
 
 npm run dev            # http://localhost:3000
 ```
+
+제목·카테고리 개편(별점 컬럼 삭제, `title` NOT NULL 추가, `category`를
+정수에서 enum으로 변경) 당시 `places`는 빈 테이블이어서 데이터 마이그레이션이
+없습니다. 이미 행이 있는 DB에 적용하려면 이 세 컬럼은 손으로 마이그레이션을
+작성해야 합니다.
 
 `src/generated/prisma`(Prisma Client)와 `public/maplibre`(maplibre 워커 청크)는
 둘 다 생성물이라 git에 없습니다. `npm install`의 postinstall이 만들고,

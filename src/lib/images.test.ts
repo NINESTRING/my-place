@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { publicImageUrl, storageExtension } from "@/lib/images"
+import {
+  ACCEPTED_IMAGE_TYPES,
+  isOwnedImagePath,
+  pickImageFile,
+  publicImageUrl,
+  storageExtension,
+  userScopedImagePath,
+} from "@/lib/images"
 
 const SUPABASE_URL = "https://xhttvfbzqhprmentinxm.supabase.co"
 
@@ -62,5 +69,119 @@ describe("storageExtension", () => {
 
   it("빈 문자열은 null 이다", () => {
     expect(storageExtension("")).toBeNull()
+  })
+})
+
+const OWNER = "11111111-2222-3333-4444-555555555555"
+const OTHER = "99999999-8888-7777-6666-555555555555"
+
+describe("userScopedImagePath", () => {
+  it("소유자 폴더 아래에 uuid 파일명을 만든다", () => {
+    const path = userScopedImagePath(OWNER, "jpg")
+    expect(path).toMatch(
+      new RegExp(
+        `^${OWNER}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.jpg$`
+      )
+    )
+  })
+
+  it("호출마다 다른 경로를 만든다", () => {
+    expect(userScopedImagePath(OWNER, "jpg")).not.toBe(
+      userScopedImagePath(OWNER, "jpg")
+    )
+  })
+
+  it("만들어 낸 경로는 자기 소유로 판정된다", () => {
+    expect(isOwnedImagePath(userScopedImagePath(OWNER, "webp"), OWNER)).toBe(
+      true
+    )
+  })
+})
+
+describe("isOwnedImagePath", () => {
+  it("자기 폴더의 경로를 통과시킨다", () => {
+    expect(isOwnedImagePath(`${OWNER}/abc.jpg`, OWNER)).toBe(true)
+  })
+
+  it("남의 폴더의 경로를 거부한다", () => {
+    expect(isOwnedImagePath(`${OTHER}/abc.jpg`, OWNER)).toBe(false)
+  })
+
+  it("접두사만 같은 폴더를 거부한다", () => {
+    expect(isOwnedImagePath("abcd/x.jpg", "abc")).toBe(false)
+  })
+
+  it("소유자 폴더가 없는 경로를 거부한다", () => {
+    expect(isOwnedImagePath("abc.jpg", OWNER)).toBe(false)
+  })
+
+  it("하위 폴더를 더 판 경로를 거부한다", () => {
+    expect(isOwnedImagePath(`${OWNER}/sub/abc.jpg`, OWNER)).toBe(false)
+  })
+
+  it("파일명이 빈 경로를 거부한다", () => {
+    expect(isOwnedImagePath(`${OWNER}/`, OWNER)).toBe(false)
+  })
+
+  it("경로 이탈로 남의 폴더를 노리는 시도를 거부한다", () => {
+    expect(isOwnedImagePath(`${OWNER}/../${OTHER}/abc.jpg`, OWNER)).toBe(false)
+  })
+
+  it("userId 가 빈 문자열이면 거부한다", () => {
+    expect(isOwnedImagePath("/abc.jpg", "")).toBe(false)
+  })
+})
+
+const imageFile = (name: string, type: string) =>
+  new File(["x"], name, { type })
+
+describe("ACCEPTED_IMAGE_TYPES", () => {
+  it("파일 선택 창의 accept 목록과 같은 허용 MIME 을 노출한다", () => {
+    expect(ACCEPTED_IMAGE_TYPES).toEqual([
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ])
+  })
+
+  it("모든 항목이 저장 확장자로 변환된다", () => {
+    for (const type of ACCEPTED_IMAGE_TYPES) {
+      expect(storageExtension(type)).not.toBeNull()
+    }
+  })
+})
+
+describe("pickImageFile", () => {
+  it("드롭된 jpeg 를 고른다", () => {
+    const file = imageFile("a.jpg", "image/jpeg")
+    expect(pickImageFile([file])).toBe(file)
+  })
+
+  it("드롭이 비어 있으면 null 이다", () => {
+    expect(pickImageFile([])).toBeNull()
+  })
+
+  it("허용 목록에 없는 이미지는 거부한다", () => {
+    expect(pickImageFile([imageFile("a.heic", "image/heic")])).toBeNull()
+  })
+
+  it("이미지가 아닌 파일은 거부한다", () => {
+    expect(pickImageFile([imageFile("a.txt", "text/plain")])).toBeNull()
+  })
+
+  it("MIME 타입이 빈 항목(폴더 드롭)은 거부한다", () => {
+    expect(pickImageFile([imageFile("photos", "")])).toBeNull()
+  })
+
+  it("여러 장을 드롭하면 허용되는 첫 장만 고른다", () => {
+    const png = imageFile("b.png", "image/png")
+    expect(
+      pickImageFile([imageFile("a.txt", "text/plain"), png, imageFile("c.webp", "image/webp")])
+    ).toBe(png)
+  })
+
+  it("FileList 처럼 ArrayLike 로 넘어와도 고른다", () => {
+    const file = imageFile("a.webp", "image/webp")
+    expect(pickImageFile({ 0: file, length: 1 })).toBe(file)
   })
 })

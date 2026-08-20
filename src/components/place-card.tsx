@@ -3,7 +3,6 @@ import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { categoryLabel } from "@/lib/categories"
 import { publicImageUrl } from "@/lib/images"
-import { clampRating } from "@/lib/places"
 
 export function PlaceCard({ place }: { place: Place }) {
   const takenAt = new Intl.DateTimeFormat("ko-KR", {
@@ -11,15 +10,14 @@ export function PlaceCard({ place }: { place: Place }) {
     month: "long",
     day: "numeric",
   }).format(place.imageCreationTime)
-
-  const stars = clampRating(place.rating)
+  const category = categoryLabel(place.category)
 
   return (
     <Card className="overflow-hidden p-0">
       <div className="relative aspect-[16/9] w-full">
         <Image
           src={publicImageUrl(place.image)}
-          alt={place.description}
+          alt={place.title}
           fill
           sizes="(max-width: 640px) 100vw, 640px"
           className="object-cover"
@@ -28,15 +26,14 @@ export function PlaceCard({ place }: { place: Place }) {
       <CardContent className="space-y-2 p-4">
         <div className="text-muted-foreground flex items-center justify-between text-sm">
           <span>{takenAt}</span>
-          <span>{categoryLabel(place.category)}</span>
+          {category && <span>{category}</span>}
         </div>
-        <p className="font-medium">{place.description}</p>
-        <p className="text-sm" aria-label={`별점 ${stars}점`}>
-          {"★".repeat(stars)}
-          <span className="text-muted-foreground">
-            {"★".repeat(5 - stars)}
-          </span>
-        </p>
+        <p className="font-medium">{place.title}</p>
+        {place.description && (
+          <p className="text-muted-foreground line-clamp-2 text-sm">
+            {place.description}
+          </p>
+        )}
       </CardContent>
     </Card>
   )
