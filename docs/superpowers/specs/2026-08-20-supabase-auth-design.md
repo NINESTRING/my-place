@@ -194,7 +194,15 @@ RLS `enable`은 그대로 둔다 — 나중에 Data API를 열 때의 안전망�
 
 본문에는 "Google 계정으로 계속하기" 버튼 하나와 "처음이시면 자동으로 가입됩니다" 안내를 둔다. 회원가입과 로그인이 같은 동작임을 숨기지 않고 설명한다.
 
-### 8.3 콜백 실패
+### 8.3 로그아웃 확인
+
+로그아웃 버튼은 바로 실행하지 않고 확인 모달을 띄운다. 되돌릴 수 있는 동작이지만 되돌리는 비용이 크다 — Google 왕복이 필요하고, 뷰포트는 `localStorage` 에 남아도 열려 있던 목록 패널과 선택 상태는 사라진다. 등록·목록 버튼과 나란히 붙어 있어 오클릭도 쉽다.
+
+`window.confirm` 대신 모달을 쓴다. 이 앱의 다른 확인 흐름(등록·로그인)이 모두 모달이라 브라우저 기본 대화상자는 스타일이 어긋난다.
+
+진행 중에는 바깥 클릭·Esc 로 닫히지 않게 막는다. 닫혀도 서버 액션은 계속 진행되므로 "취소한 것처럼 보이는데 로그아웃되는" 상태가 생긴다.
+
+### 8.4 콜백 실패
 
 `exchangeCodeForSession`이 실패하면 `/?auth_error=1`로 돌려보내고 `sonner` 토스트를 띄운 뒤 `history.replaceState`로 쿼리를 정리한다. 전용 에러 페이지를 만들지 않는 이유는 이 앱이 한 화면 구조이며 이미 `Toaster`가 레이아웃에 있기 때문이다.
 
@@ -209,6 +217,7 @@ RLS `enable`은 그대로 둔다 — 나중에 Data API를 열 때의 안전망�
 | `src/lib/supabase/browser.ts` | 브라우저 클라이언트 |
 | `src/lib/supabase/server.ts` | 쿠키 바인딩 서버 클라이언트 |
 | `src/components/login-dialog.tsx` | 로그인 모달 |
+| `src/components/sign-out-dialog.tsx` | 로그아웃 확인 모달 |
 | `src/components/auth-error-toast.tsx` | 콜백 실패 토스트 + 주소창 정리 |
 | `src/actions/auth.ts` | `signOutAction` |
 | `supabase/migrations/20260820000000_drop_stub_user_places.sql` | 스텁 행 삭제 |
@@ -293,7 +302,7 @@ node --env-file=.env scripts/purge-stub-storage.mjs
 3. 목록 버튼 → 로그인 모달, 문구가 "내 장소 목록을"
 4. 로그인 버튼 → Google 로그인 → `/`로 복귀, 로그인 상태
 5. 사진 등록 → Storage 경로가 `<uuid>/<uuid>.jpg`, 마커 생성
-6. 로그아웃 → 마커가 사라지고 지도만 남음
+6. 로그아웃 버튼 → 확인 모달. 취소하면 로그인 상태 유지, 확인하면 마커가 사라지고 지도만 남음
 7. 새 시크릿 창에서 다른 계정 로그인 → 첫 계정의 장소가 안 보임
 
 ### 완료 기준

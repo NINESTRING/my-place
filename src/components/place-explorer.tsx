@@ -29,6 +29,7 @@ import { signOutAction } from "@/actions/auth"
 import { CreatePlaceDialog } from "@/components/create-place-dialog"
 import { LoginDialog, type LoginReason } from "@/components/login-dialog"
 import { PlaceListPanel } from "@/components/place-list-panel"
+import { SignOutDialog } from "@/components/sign-out-dialog"
 import { Button } from "@/components/ui/button"
 import { useLastData } from "@/hooks/use-last-data"
 import { useLocalState } from "@/hooks/use-local-state"
@@ -80,6 +81,7 @@ export function PlaceExplorer({
   const [createOpen, setCreateOpen] = useState(false)
   const [loginReason, setLoginReason] = useState<LoginReason>(null)
   const [loginOpen, setLoginOpen] = useState(false)
+  const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, startSignOut] = useTransition()
   const [viewport, setViewport, viewportHydrated] = useLocalState<Viewport>(
     "viewport",
@@ -192,7 +194,7 @@ export function PlaceExplorer({
     setLoginOpen(true)
   }
 
-  const onSignOut = () => {
+  const onSignOutConfirmed = () => {
     startSignOut(async () => {
       await signOutAction()
       // 서버 액션이 revalidatePath 로 RSC 를 무효화하지만, 이 컴포넌트의
@@ -201,6 +203,7 @@ export function PlaceExplorer({
       setSelected(null)
       setListOpen(false)
       setReloadToken((n) => n + 1)
+      setSignOutOpen(false)
     })
   }
 
@@ -283,8 +286,7 @@ export function PlaceExplorer({
         {isAuthenticated ? (
           <Button
             variant="outline"
-            onClick={onSignOut}
-            disabled={signingOut}
+            onClick={() => setSignOutOpen(true)}
             aria-label="로그아웃"
             className="size-11 rounded-full shadow-lg"
           >
@@ -324,6 +326,18 @@ export function PlaceExplorer({
         open={loginOpen}
         onOpenChange={setLoginOpen}
         reason={loginReason}
+      />
+
+      <SignOutDialog
+        open={signOutOpen}
+        // 로그아웃 진행 중에는 바깥 클릭·Esc 로 닫히지 않게 한다. 닫혀도
+        // 액션은 계속 진행되므로 "취소한 것처럼 보이는데 로그아웃되는" 상태가
+        // 생긴다.
+        onOpenChange={(next) => {
+          if (!signingOut) setSignOutOpen(next)
+        }}
+        onConfirm={onSignOutConfirmed}
+        pending={signingOut}
       />
     </div>
   )
