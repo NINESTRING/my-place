@@ -1,4 +1,4 @@
-import type { Place } from "@prisma/client"
+import type { Place } from "@/generated/prisma/client"
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { categoryLabel } from "@/lib/categories"

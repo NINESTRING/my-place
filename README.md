@@ -35,9 +35,12 @@
 - **데이터**: 서버 컴포넌트가 Prisma를 직접 호출. 쓰기는 서버 액션,
   지도 bounds 재조회는 Route Handler(GET)
 - **검증**: Zod (클라이언트 폼과 서버 액션이 스키마 공유)
-- **DB / ORM**: PostgreSQL (Supabase) + Prisma 6
-- **지도**: MapLibre GL 5 (`react-map-gl` 8) + OpenFreeMap 타일
-  (`maplibre-gl`은 **5.x에 고정**되어 있습니다 — 아래 알려진 이슈 참고)
+- **DB / ORM**: PostgreSQL (Supabase) + Prisma 7 (`prisma-client` 제너레이터 +
+  `@prisma/adapter-pg` 드라이버 어댑터. 클라이언트는 `node_modules`가 아니라
+  `src/generated/prisma`로 생성되며 git에는 올라가지 않습니다)
+- **지도**: MapLibre GL 6 (`react-map-gl` 8) + OpenFreeMap 타일
+  (워커 청크를 `public/maplibre`로 복사해 `setWorkerUrl`로 지정합니다 —
+  아래 알려진 이슈 참고)
 - **이미지**: Supabase Storage (public 버킷) + next/image 내장 최적화
 - **인증**: 미구현. 벤더는 Supabase Auth로 확정했습니다. `src/lib/auth.ts`의 `getCurrentUserId()`가 고정값 `"1"`을 반환하는 스텁입니다.
 - **테스트**: Vitest
@@ -101,20 +104,25 @@ app/
 src/
   actions/     서버 액션 (createPlaceAction, createUploadUrlAction)
   schemas/     Zod 스키마 (폼·서버 액션 공용)
-  lib/         prisma, places, images, supabase, auth, categories, utils(cn)
+  lib/         prisma, places(순수 헬퍼), places.server(DB 조회), images,
+               supabase, auth, categories, utils(cn)
   components/  PlaceExplorer(화면 전체), PlaceListPanel, CreatePlaceDialog,
                PlaceCard, PlaceForm, StarRating, CategoryPicker
   components/ui/  shadcn 생성물 (Field 기반 폼 프리미티브 포함, form.tsx 없음)
   hooks/       useLocalState, useLastData
   assets/      Lottie 애니메이션 JSON
+  generated/   Prisma Client 생성물 (gitignore)
 prisma/schema.prisma
+prisma.config.ts       Prisma 7 CLI 설정 (스키마 경로·DATABASE_URL)
+scripts/               maplibre 워커 청크 복사, dev-doctor
+public/maplibre/       maplibre 워커 청크 복사본 (gitignore)
 ```
 
 ## 시작하기
 
 ### 요구 사항
 
-- Node.js 20+
+- Node.js 20.19+ (Prisma 7 요구 사항)
 - PostgreSQL 데이터베이스
 - Supabase 프로젝트 (Storage 버킷 `places` 포함)
 
@@ -135,13 +143,17 @@ Supabase 프로젝트에는 `supabase/migrations/`의 SQL도 적용해야 합니
 ### 설치 및 실행
 
 ```bash
-npm install
+npm install            # postinstall이 prisma generate와 maplibre 워커 복사를 실행
 
-npx prisma generate    # Prisma Client 생성
 npx prisma db push     # 스키마를 DB에 반영
 
 npm run dev            # http://localhost:3000
 ```
+
+`src/generated/prisma`(Prisma Client)와 `public/maplibre`(maplibre 워커 청크)는
+둘 다 생성물이라 git에 없습니다. `npm install`의 postinstall이 만들고,
+`predev`·`prebuild`가 워커 복사본을 다시 맞춥니다. 스키마를 고친 뒤에는
+`npx prisma generate`를 직접 실행하세요.
 
 ### 그 외 스크립트
 
@@ -173,14 +185,23 @@ npm run test:watch  # Vitest 단위 테스트(watch 모드)
   제외했습니다.
 - **HEIC 미지원** — 파일 선택이 JPEG·PNG·WebP로 제한됩니다. Next.js 내장 이미지 최적화가 HEIC 출력을 지원하지 않기 때문입니다.
 - **OpenFreeMap 타일은 SLA가 없습니다.** 기부로 운영되는 무료 서비스입니다. 안정성이 필요해지면 `mapStyle` URL만 다른 제공자로 바꾸면 됩니다.
-- **`maplibre-gl`을 6.x로 올리면 지도가 빈 화면이 됩니다.** 6.x는 워커 URL을
-  `import.meta.url`에서 유도하고 그 값이 `http(s)` URL이 아니면 빈 문자열을
-  반환합니다. Turbopack이 번들한 청크에서는 `http` URL이 아니므로 워커 URL이
-  `""`가 되어 현재 문서 경로로 해석되고, dev 서버가 HTML을 돌려주면서 워커가
-  죽습니다. 타일 fetch와 파싱이 전부 워커에서 일어나기 때문에 스타일과
-  스프라이트만 200으로 로드된 채 지도가 비어 보이며, **예외가 발생하지 않아
-  단위 테스트·타입 체크·빌드가 모두 통과합니다.** 5.x는 워커를 인라인 Blob으로
-  만들어 번들러에 무관하게 동작합니다. `src/lib/deps.test.ts`가 실수로 올라가는
-  것을 막습니다. 6.x로 올리려면 `setWorkerUrl`(`react-map-gl`의 `workerUrl`
-  prop)로 워커를 직접 지정하고, 올린 뒤 **브라우저에서 타일이 실제로 그려지는지
-  눈으로 확인**해야 합니다.
+- **`maplibre-gl` 6의 워커는 URL을 직접 지정해 줘야 합니다.** 6.x는 워커를
+  별도 청크로 내보내고 그 URL을 자기 모듈의 `import.meta.url`에서 유도하는데,
+  그 값이 `http(s)` URL이 아니면 빈 문자열을 반환합니다. Turbopack이 번들한
+  청크에서는 `http` URL이 아니므로 워커 URL이 `""`가 되어 현재 문서 경로로
+  해석되고, 워커는 만들어지되 아무 일도 하지 못합니다. 타일 fetch와 파싱이
+  전부 워커에서 일어나기 때문에 스타일·스프라이트·글리프만 로드된 채 지도가
+  비어 보이며, **예외가 발생하지 않아 단위 테스트·타입 체크·빌드가 모두
+  통과합니다.**
+
+  그래서 `scripts/copy-maplibre-worker.mjs`가 `maplibre-gl-worker.mjs`와 그것이
+  상대 경로로 import하는 `maplibre-gl-shared.mjs`를 `public/maplibre`로
+  복사하고, `src/components/place-explorer.tsx`가 모듈 최상단에서
+  `setWorkerUrl("/maplibre/maplibre-gl-worker.mjs")`로 그 경로를 지정합니다.
+  `src/lib/deps.test.ts`가 복사본이 없거나 낡은 경우를 잡습니다. 워커가
+  살아 있는지는 **브라우저에서 벡터 타일 요청이 실제로 나가는지**로만 확인할
+  수 있습니다 — 워커 안에서 나가는 요청이라 DevTools에서는 워커 컨텍스트를
+  봐야 보입니다.
+- 워커에 넘기는 `maplibre-gl-shared.mjs`는 메인 번들에 들어간 것과 같은 코드를
+  한 번 더 받습니다(약 470KB). 워커 URL을 문자열로만 지정할 수 있는 6.x의
+  제약이라 지금은 감수하고 있습니다.

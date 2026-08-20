@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { getPlacesInBounds } from "@/lib/places"
+import { getPlacesInBounds } from "@/lib/places.server"
 import { boundsQuerySchema } from "@/schemas/place"
 
 export async function GET(request: NextRequest) {

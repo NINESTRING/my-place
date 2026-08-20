@@ -1,5 +1,5 @@
 import { PlaceExplorer } from "@/components/place-explorer"
-import { getPlacesInBounds } from "@/lib/places"
+import { getPlacesInBounds } from "@/lib/places.server"
 import type { Bounds } from "@/schemas/place"
 
 // 지도에 보이는 장소는 매 요청마다 최신 DB 상태를 반영해야 하므로 정적

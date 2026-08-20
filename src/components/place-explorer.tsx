@@ -1,18 +1,20 @@
 "use client"
 
-// maplibre-gl 은 5.x 에 고정한다. 6.x 는 워커 URL 을 import.meta.url 에서
-// 유도하고 그 값이 http(s) URL 이 아니면 빈 문자열을 반환하는데(dist/
-// maplibre-gl.mjs 의 워커 URL 헬퍼 참고), Turbopack 이 번들한 청크에서는
-// http URL 이 아니라서 워커 URL 이 ""가 되고 현재 문서 경로로 해석된다.
-// 그러면 dev 서버가 HTML 을 돌려주어 "Failed to load module script: ...
-// non-JavaScript MIME type of text/html" 로 워커가 죽고, 타일 fetch·파싱이
-// 전부 워커에서 일어나므로 스타일과 스프라이트만 200 으로 로드된 채 지도가
-// 빈 화면이 된다. 예외도 안 나므로 조용히 실패한다.
-// 5.x 는 워커를 인라인 Blob 으로 만들어 번들러에 무관하게 동작한다.
-// src/lib/deps.test.ts 가 실수로 6.x 로 올라가는 것을 막는다.
+// maplibre-gl 6 은 워커를 별도 청크로 내보내고 그 URL 을 자기 모듈의
+// import.meta.url 에서 유도한다. 그 값이 http(s) URL 이 아니면 빈 문자열을
+// 돌려주는데(dist/maplibre-gl.mjs 의 워커 URL 헬퍼 참고), Turbopack 이 번들한
+// 청크에서는 http URL 이 아니라 워커가 아예 생성되지 않는다. 타일 fetch 와
+// 파싱은 전부 워커에서 일어나므로, 예외 하나 없이 지도만 빈 화면이 된다.
+//
+// 그래서 워커 청크를 public/maplibre 로 복사해 두고(scripts/
+// copy-maplibre-worker.mjs, predev·prebuild 에서 실행) 그 http 경로를
+// setWorkerUrl 로 직접 지정한다. Map 이 마운트되기 전에 정해져야 하므로
+// 모듈 최상단에서 부른다. src/lib/deps.test.ts 가 복사본이 빠지거나
+// 낡는 것을 막는다.
 import "maplibre-gl/dist/maplibre-gl.css"
+import { setWorkerUrl } from "maplibre-gl"
 
-import type { Place } from "@prisma/client"
+import type { Place } from "@/generated/prisma/client"
 import { ListIcon, MapPinPlusIcon } from "lucide-react"
 import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -31,6 +33,10 @@ import { useLocalState } from "@/hooks/use-local-state"
 import { publicImageUrl } from "@/lib/images"
 import { revivePlace, type SerializedPlace } from "@/lib/places"
 import type { Bounds } from "@/schemas/place"
+
+if (typeof window !== "undefined") {
+  setWorkerUrl("/maplibre/maplibre-gl-worker.mjs")
+}
 
 type Viewport = { latitude: number; longitude: number; zoom: number }
 

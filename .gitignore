@@ -37,3 +37,9 @@ next-env.d.ts
 
 # superpowers SDD scratch
 /.superpowers/
+
+# prisma generated client
+/src/generated/
+
+# maplibre 워커 청크 복사본 (scripts/copy-maplibre-worker.mjs)
+/public/maplibre/

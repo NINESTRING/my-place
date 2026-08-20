@@ -1,6 +1,6 @@
 "use client"
 
-import type { Place } from "@prisma/client"
+import type { Place } from "@/generated/prisma/client"
 import { XIcon } from "lucide-react"
 import { PlaceCard } from "@/components/place-card"
 import { Button } from "@/components/ui/button"
