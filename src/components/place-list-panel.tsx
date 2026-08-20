@@ -3,6 +3,7 @@
 import type { Place } from "@/generated/prisma/client"
 import { XIcon } from "lucide-react"
 import { PlaceCard } from "@/components/place-card"
+import { PlaceCardMenu } from "@/components/place-card-menu"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -23,6 +24,7 @@ export function PlaceListPanel({
   places,
   selectedId,
   onSelect,
+  onDelete,
   onClose,
 }: {
   ref?: React.Ref<HTMLElement>
@@ -30,6 +32,7 @@ export function PlaceListPanel({
   places: Place[]
   selectedId: number | null
   onSelect: (place: Place) => void
+  onDelete: (place: Place) => void
   onClose: () => void
 }) {
   return (
@@ -67,7 +70,7 @@ export function PlaceListPanel({
         ) : (
           <ul className="space-y-3">
             {places.map((place) => (
-              <li key={place.id}>
+              <li key={place.id} className="relative">
                 <button
                   type="button"
                   onClick={() => onSelect(place)}
@@ -78,6 +81,16 @@ export function PlaceListPanel({
                 >
                   <PlaceCard place={place} />
                 </button>
+
+                {/* 메뉴를 카드 버튼 *안* 에 넣으면 버튼 중첩이라 마크업이
+                    무효가 되고, 메뉴를 여는 클릭이 바깥 버튼으로 새어 나가
+                    지도가 함께 날아간다. 형제로 두고 위치만 겹친다. */}
+                <div className="absolute top-2 right-2">
+                  <PlaceCardMenu
+                    title={place.title}
+                    onDelete={() => onDelete(place)}
+                  />
+                </div>
               </li>
             ))}
           </ul>

@@ -24,9 +24,12 @@ import Map, {
   type MapRef,
   type ViewStateChangeEvent,
 } from "react-map-gl/maplibre"
+import { toast } from "sonner"
 import { useDebounce } from "use-debounce"
 import { signOutAction } from "@/actions/auth"
+import { deletePlaceAction } from "@/actions/place"
 import { CreatePlaceDialog } from "@/components/create-place-dialog"
+import { DeletePlaceDialog } from "@/components/delete-place-dialog"
 import { LoginDialog, type LoginReason } from "@/components/login-dialog"
 import { PlaceListPanel } from "@/components/place-list-panel"
 import { SignOutDialog } from "@/components/sign-out-dialog"
@@ -83,6 +86,8 @@ export function PlaceExplorer({
   const [loginOpen, setLoginOpen] = useState(false)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, startSignOut] = useTransition()
+  const [deleting, setDeleting] = useState<Place | null>(null)
+  const [deletePending, startDelete] = useTransition()
   const [viewport, setViewport, viewportHydrated] = useLocalState<Viewport>(
     "viewport",
     DEFAULT_VIEWPORT
@@ -192,6 +197,27 @@ export function PlaceExplorer({
     }
     setLoginReason(reason)
     setLoginOpen(true)
+  }
+
+  const onDeleteConfirmed = () => {
+    const target = deleting
+    if (!target) return
+
+    startDelete(async () => {
+      const result = await deletePlaceAction(target.id)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+
+      setDeleting(null)
+      // 지운 장소의 팝업이 떠 있으면 참조가 사라진 카드가 지도에 남는다.
+      setSelected((prev) => (prev?.id === target.id ? null : prev))
+      // 이 화면의 목록은 RSC 가 아니라 /api/places 로 가져오므로
+      // revalidatePath 로는 갱신되지 않는다. 토큰을 올려 다시 부른다.
+      setReloadToken((n) => n + 1)
+      toast.success("장소를 삭제했습니다.")
+    })
   }
 
   const onSignOutConfirmed = () => {
@@ -313,6 +339,7 @@ export function PlaceExplorer({
         places={shownPlaces}
         selectedId={selected?.id ?? null}
         onSelect={onSelectFromList}
+        onDelete={setDeleting}
         onClose={() => setListOpen(false)}
       />
 
@@ -338,6 +365,19 @@ export function PlaceExplorer({
         }}
         onConfirm={onSignOutConfirmed}
         pending={signingOut}
+      />
+
+      <DeletePlaceDialog
+        open={deleting !== null}
+        title={deleting?.title ?? ""}
+        // 삭제가 진행 중일 때는 바깥 클릭·Esc 로 닫히지 않게 한다. 닫혀도
+        // 액션은 계속 진행되므로 "취소한 것처럼 보이는데 지워지는" 상태가
+        // 생긴다. 로그아웃 모달과 같은 처리다.
+        onOpenChange={(next) => {
+          if (!deletePending && !next) setDeleting(null)
+        }}
+        onConfirm={onDeleteConfirmed}
+        pending={deletePending}
       />
     </div>
   )
