@@ -16,7 +16,7 @@ export function PlaceCard({ place }: { place: Place }) {
       <div className="relative aspect-[16/9] w-full">
         <Image
           src={publicImageUrl(place.image)}
-          alt={place.description}
+          alt={place.title}
           fill
           sizes="(max-width: 640px) 100vw, 640px"
           className="object-cover"
@@ -27,7 +27,12 @@ export function PlaceCard({ place }: { place: Place }) {
           <span>{takenAt}</span>
           <span>{categoryLabel(place.category)}</span>
         </div>
-        <p className="font-medium">{place.description}</p>
+        <p className="font-medium">{place.title}</p>
+        {place.description && (
+          <p className="text-muted-foreground line-clamp-2 text-sm">
+            {place.description}
+          </p>
+        )}
       </CardContent>
     </Card>
   )

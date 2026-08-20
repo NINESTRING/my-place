@@ -9,7 +9,8 @@ describe("revivePlace", () => {
     imageCreationTime: "2026-01-01T00:00:00.000Z",
     latitude: 37.65874,
     longitude: 126.97759,
-    description: "한강 야경",
+    title: "한강 야경",
+    description: "다리 조명이 켜지는 시간에 갔다",
     category: 2,
     createdAt: "2026-01-02T00:00:00.000Z",
     updatedAt: "2026-01-03T00:00:00.000Z",
@@ -34,6 +35,7 @@ describe("revivePlace", () => {
     expect(result.image).toBe(serialized.image)
     expect(result.latitude).toBe(serialized.latitude)
     expect(result.longitude).toBe(serialized.longitude)
+    expect(result.title).toBe(serialized.title)
     expect(result.description).toBe(serialized.description)
     expect(result.category).toBe(serialized.category)
   })

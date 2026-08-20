@@ -6,7 +6,8 @@ const OWNER = "11111111-2222-3333-4444-555555555555"
 const OBJECT = "0f9c1a2b-3d4e-5f60-8a9b-1c2d3e4f5061"
 
 const validInput = {
-  description: "한강 야경",
+  title: "한강 야경",
+  description: "다리 조명이 켜지는 시간에 갔다",
   image: `${OWNER}/${OBJECT}.jpg`,
   imageCreationTime: new Date("2026-01-01T00:00:00.000Z"),
   latitude: 37.65874,
@@ -33,8 +34,54 @@ describe("placeInputSchema", () => {
     expect(result.success).toBe(false)
   })
 
-  it("설명이 비어 있으면 거부한다", () => {
-    const result = placeInputSchema.safeParse({ ...validInput, description: "" })
+  it("제목이 비어 있으면 거부한다", () => {
+    const result = placeInputSchema.safeParse({ ...validInput, title: "" })
+    expect(result.success).toBe(false)
+  })
+
+  it("제목이 60자를 넘으면 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      title: "가".repeat(61),
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("설명은 없어도 통과한다", () => {
+    const { description: _omitted, ...withoutDescription } = validInput
+    const result = placeInputSchema.safeParse(withoutDescription)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.description).toBeUndefined()
+    }
+  })
+
+  it("공백만 있는 설명은 undefined 로 접는다", () => {
+    // "" 와 null 이 DB 에 섞이면 "설명이 있는지" 판정이 두 갈래가 된다.
+    // Prisma 는 undefined 를 "값 없음"으로 보고 nullable 컬럼에 NULL 을 넣는다.
+    const result = placeInputSchema.safeParse({ ...validInput, description: "   " })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.description).toBeUndefined()
+    }
+  })
+
+  it("설명 앞뒤 공백을 다듬는다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      description: "  다리 조명  ",
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.description).toBe("다리 조명")
+    }
+  })
+
+  it("설명이 500자를 넘으면 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      description: "가".repeat(501),
+    })
     expect(result.success).toBe(false)
   })
 

@@ -17,7 +17,8 @@ model Place {
   imageCreationTime DateTime
   latitude          Float
   longitude         Float
-  description       String
+  title             String
+  description       String?
   category          Int
   createdAt         DateTime @default(now()) @map(name: "created_at")
   updatedAt         DateTime @default(now()) @map(name: "updated_at")

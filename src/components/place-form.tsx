@@ -21,6 +21,7 @@ import { toast } from "sonner"
 import { CategoryPicker } from "@/components/category-picker"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { createPlaceAction, createUploadUrlAction } from "@/actions/place"
 import {
@@ -84,7 +85,7 @@ export function PlaceForm({
     formState: { errors },
   } = useForm<PlaceFormValues>({
     resolver: zodResolver(placeFormSchema),
-    defaultValues: { description: "", category: 1 },
+    defaultValues: { title: "", description: "", category: 1 },
   })
 
   // lottie-web 은 import 시점에 document 에 접근하므로 브라우저에서만 불러온다.
@@ -247,6 +248,7 @@ export function PlaceForm({
       await uploadToStorage(file, uploadUrl.signedUrl)
 
       const result = await createPlaceAction({
+        title: values.title,
         description: values.description,
         image: uploadUrl.path,
         imageCreationTime: exif.createDate,
@@ -341,14 +343,29 @@ export function PlaceForm({
       )}
 
       <Field>
-        <FieldLabel htmlFor="description">설명</FieldLabel>
+        <FieldLabel htmlFor="title">제목</FieldLabel>
+        <Controller
+          control={control}
+          name="title"
+          render={({ field }) => (
+            <Input id="title" placeholder="장소 이름" {...field} />
+          )}
+        />
+        <FieldError errors={[errors.title]} />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="description">
+          설명{" "}
+          <span className="text-muted-foreground font-normal">(선택)</span>
+        </FieldLabel>
         <Controller
           control={control}
           name="description"
           render={({ field }) => (
             <Textarea
               id="description"
-              placeholder="이 장소는 어땠나요?"
+              placeholder="이 장소는 어땠나요? (비워 둘 수 있어요)"
               rows={3}
               {...field}
             />

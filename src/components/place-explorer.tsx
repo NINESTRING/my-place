@@ -244,11 +244,11 @@ export function PlaceExplorer({
               maxWidth="260px"
             >
               <div className="space-y-2">
-                <p className="font-medium">{selected.description}</p>
+                <p className="font-medium">{selected.title}</p>
                 <div className="relative aspect-square w-full overflow-hidden rounded">
                   <Image
                     src={publicImageUrl(selected.image)}
-                    alt={selected.description}
+                    alt={selected.title}
                     fill
                     sizes="260px"
                     className="object-cover"

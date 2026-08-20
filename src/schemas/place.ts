@@ -58,8 +58,33 @@ const imagePath = z
     "이미지 경로가 올바르지 않습니다"
   )
 
+/**
+ * 폼과 서버 입력이 공유하는 사용자 작성 필드. 예전에는 두 스키마가 같은
+ * 필드를 각각 정의해서, 폼의 defaultValues 까지 합쳐 세 곳이 서로 어긋날 수
+ * 있었다.
+ */
+const placeFields = {
+  title: z
+    .string()
+    .min(1, "제목을 입력해 주세요")
+    .max(60, "제목은 60자까지 쓸 수 있습니다"),
+  /**
+   * 손대지 않은 Textarea 는 ""를 보낸다. DB 에 ""와 null 이 섞이면 "설명이
+   * 있는지" 판정이 두 갈래가 되므로 경계에서 undefined 로 접는다. Prisma 는
+   * undefined 를 "값 없음"으로 보고 nullable 컬럼에 NULL 을 넣는다.
+   *
+   * transform 을 거쳐도 입력 타입과 출력 타입이 모두 `string | undefined` 라서
+   * react-hook-form 이 이 스키마를 그대로 resolver 로 쓸 수 있다.
+   */
+  description: z
+    .string()
+    .max(500, "설명은 500자까지 쓸 수 있습니다")
+    .transform((value) => value.trim() || undefined)
+    .optional(),
+}
+
 export const placeInputSchema = z.object({
-  description: z.string().min(1, "설명을 입력해 주세요").max(500),
+  ...placeFields,
   image: imagePath,
   imageCreationTime: z.coerce.date(),
   latitude,
@@ -71,7 +96,7 @@ export type PlaceInput = z.infer<typeof placeInputSchema>
 
 /** 폼이 다루는 값. 이미지는 업로드 전이므로 File이고 좌표는 EXIF에서 온다. */
 export const placeFormSchema = z.object({
-  description: z.string().min(1, "설명을 입력해 주세요").max(500),
+  ...placeFields,
   category: z.number().int().min(1).max(4),
 })
 
