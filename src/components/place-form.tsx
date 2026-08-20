@@ -8,7 +8,13 @@ import exifr from "exifr"
 // (lottie-web 은 모듈 평가 시점에 document 를 만진다).
 import type { AnimationItem } from "lottie-web"
 import Image from "next/image"
-import { useEffect, useRef, useState, type ChangeEvent } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+} from "react"
 import { Controller, useForm } from "react-hook-form"
 import Map, { Marker, type MapRef } from "react-map-gl/maplibre"
 import { toast } from "sonner"
@@ -18,7 +24,12 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
 import { createPlaceAction, createUploadUrlAction } from "@/actions/place"
-import { MAX_UPLOAD_BYTES } from "@/lib/images"
+import {
+  ACCEPTED_IMAGE_TYPES,
+  MAX_UPLOAD_BYTES,
+  pickImageFile,
+} from "@/lib/images"
+import { cn } from "@/lib/utils"
 import { placeFormSchema, type PlaceFormValues } from "@/schemas/place"
 
 type ExifData = {
@@ -61,9 +72,11 @@ export function PlaceForm({
 }) {
   const lottieRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapRef>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [exif, setExif] = useState<ExifData | null>(null)
+  const [dragging, setDragging] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const {
@@ -111,15 +124,20 @@ export function PlaceForm({
     }
   }, [])
 
-  const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const selected = event.target.files?.[0]
-    if (!selected) return
+  // 거부한 사진은 input 값을 비운다. 그러지 않으면 같은 사진을 다시 골라도
+  // change 가 다시 발생하지 않아 안내 토스트조차 뜨지 않는다.
+  const clearInput = () => {
+    if (inputRef.current) inputRef.current.value = ""
+  }
 
+  // 파일 선택 창과 드롭이 함께 쓰는 경로다. 드롭에는 리셋할 input 이벤트가
+  // 없으므로 ChangeEvent 대신 File 을 받는다.
+  const handleFile = async (selected: File) => {
     // 버킷의 file_size_limit(10MB)을 넘는 파일은 EXIF 파싱과 서명 URL
     // 발급을 거칠 필요 없이 여기서 바로 거부한다.
     if (selected.size > MAX_UPLOAD_BYTES) {
       toast.error("사진 용량이 너무 큽니다. 10MB 이하 사진을 선택해 주세요.")
-      event.target.value = ""
+      clearInput()
       return
     }
 
@@ -127,7 +145,7 @@ export function PlaceForm({
       const parsed = await exifr.parse(selected)
       if (parsed?.latitude == null || parsed?.longitude == null) {
         toast.error("사진에 위치 정보가 없습니다. 다른 사진을 선택해 주세요.")
-        event.target.value = ""
+        clearInput()
         return
       }
 
@@ -148,8 +166,42 @@ export function PlaceForm({
       )
     } catch {
       toast.error("사진을 읽지 못했습니다.")
-      event.target.value = ""
+      clearInput()
     }
+  }
+
+  const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0]
+    if (selected) void handleFile(selected)
+  }
+
+  // dragover 에서 preventDefault 를 해야 이 요소가 유효한 드롭 대상이 된다.
+  // 이 한 줄이 없으면 브라우저는 드롭을 우리에게 넘기지 않고 기본 동작 —
+  // 그 사진으로 페이지를 이동 — 을 실행한다. 사진이 새 탭에 열리고 업로드는
+  // 시작조차 되지 않았던 것이 이 때문이다.
+  const onDragOver = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "copy"
+    setDragging(true)
+  }
+
+  const onDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault()
+    setDragging(false)
+
+    const dropped = pickImageFile(event.dataTransfer.files)
+    if (!dropped) {
+      // 파일이 아예 없는 드롭은 다른 탭·앱에서 이미지를 끌어온 경우다.
+      // 그때는 파일이 아니라 URL 만 넘어오므로 올릴 것이 없다.
+      toast.error(
+        event.dataTransfer.files.length === 0
+          ? "사진 파일을 끌어다 놓아 주세요."
+          : "JPG·PNG·WebP 사진만 올릴 수 있습니다."
+      )
+      return
+    }
+
+    void handleFile(dropped)
   }
 
   useEffect(() => {
@@ -157,6 +209,26 @@ export function PlaceForm({
       if (preview) URL.revokeObjectURL(preview)
     }
   }, [preview])
+
+  // 드롭 존은 모달 안의 작은 사각형이라 조준을 살짝 놓치기 쉽다. 존 밖으로
+  // 떨어진 파일은 기본 동작으로 넘어가 브라우저가 그 사진으로 이동해 버리고,
+  // 채우던 폼이 통째로 날아간다. 폼이 떠 있는 동안은 존 밖의 드롭도 삼킨다.
+  // 존의 핸들러가 먼저(React 는 document 에 위임하고 이 리스너는 그 위인
+  // window 에 붙는다) 돌기 때문에 정상 드롭은 그대로 처리된다.
+  //
+  // 파일이 실린 드래그만 삼킨다. 전부 삼키면 설명 필드에 선택한 텍스트를
+  // 끌어다 놓는 브라우저 기본 동작까지 같이 죽는다.
+  useEffect(() => {
+    const swallow = (event: globalThis.DragEvent) => {
+      if (event.dataTransfer?.types.includes("Files")) event.preventDefault()
+    }
+    window.addEventListener("dragover", swallow)
+    window.addEventListener("drop", swallow)
+    return () => {
+      window.removeEventListener("dragover", swallow)
+      window.removeEventListener("drop", swallow)
+    }
+  }, [])
 
   const onSubmit = async (values: PlaceFormValues) => {
     if (!file || !exif) {
@@ -208,9 +280,19 @@ export function PlaceForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div>
+        {/* 자식은 pointer-events 를 끈다. 자식이 드래그 대상이 되면 라벨
+            내부에서 자식으로 넘어갈 때마다 dragleave 가 튀어 테두리 강조가
+            깜빡인다. 라벨 자체는 그대로 클릭된다. */}
         <label
           htmlFor="photo"
-          className="border-input hover:bg-accent relative flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed transition-colors"
+          onDragEnter={onDragOver}
+          onDragOver={onDragOver}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          className={cn(
+            "border-input relative flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed transition-colors",
+            dragging ? "border-primary bg-accent" : "hover:bg-accent"
+          )}
         >
           {preview ? (
             <Image
@@ -218,16 +300,17 @@ export function PlaceForm({
               alt="선택한 사진"
               fill
               unoptimized
-              className="object-cover"
+              className="pointer-events-none object-cover"
             />
           ) : (
-            <div ref={lottieRef} className="h-32 w-32" />
+            <div ref={lottieRef} className="pointer-events-none h-32 w-32" />
           )}
         </label>
         <input
+          ref={inputRef}
           id="photo"
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={ACCEPTED_IMAGE_TYPES.join(",")}
           className="sr-only"
           onChange={onFileChange}
         />

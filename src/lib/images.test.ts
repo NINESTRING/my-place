@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
+  ACCEPTED_IMAGE_TYPES,
   isOwnedImagePath,
+  pickImageFile,
   publicImageUrl,
   storageExtension,
   userScopedImagePath,
@@ -127,5 +129,59 @@ describe("isOwnedImagePath", () => {
 
   it("userId 가 빈 문자열이면 거부한다", () => {
     expect(isOwnedImagePath("/abc.jpg", "")).toBe(false)
+  })
+})
+
+const imageFile = (name: string, type: string) =>
+  new File(["x"], name, { type })
+
+describe("ACCEPTED_IMAGE_TYPES", () => {
+  it("파일 선택 창의 accept 목록과 같은 허용 MIME 을 노출한다", () => {
+    expect(ACCEPTED_IMAGE_TYPES).toEqual([
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ])
+  })
+
+  it("모든 항목이 저장 확장자로 변환된다", () => {
+    for (const type of ACCEPTED_IMAGE_TYPES) {
+      expect(storageExtension(type)).not.toBeNull()
+    }
+  })
+})
+
+describe("pickImageFile", () => {
+  it("드롭된 jpeg 를 고른다", () => {
+    const file = imageFile("a.jpg", "image/jpeg")
+    expect(pickImageFile([file])).toBe(file)
+  })
+
+  it("드롭이 비어 있으면 null 이다", () => {
+    expect(pickImageFile([])).toBeNull()
+  })
+
+  it("허용 목록에 없는 이미지는 거부한다", () => {
+    expect(pickImageFile([imageFile("a.heic", "image/heic")])).toBeNull()
+  })
+
+  it("이미지가 아닌 파일은 거부한다", () => {
+    expect(pickImageFile([imageFile("a.txt", "text/plain")])).toBeNull()
+  })
+
+  it("MIME 타입이 빈 항목(폴더 드롭)은 거부한다", () => {
+    expect(pickImageFile([imageFile("photos", "")])).toBeNull()
+  })
+
+  it("여러 장을 드롭하면 허용되는 첫 장만 고른다", () => {
+    const png = imageFile("b.png", "image/png")
+    expect(
+      pickImageFile([imageFile("a.txt", "text/plain"), png, imageFile("c.webp", "image/webp")])
+    ).toBe(png)
+  })
+
+  it("FileList 처럼 ArrayLike 로 넘어와도 고른다", () => {
+    const file = imageFile("a.webp", "image/webp")
+    expect(pickImageFile({ 0: file, length: 1 })).toBe(file)
   })
 })

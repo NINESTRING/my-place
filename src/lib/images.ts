@@ -37,6 +37,30 @@ export function storageExtension(contentType: string): string | null {
 }
 
 /**
+ * 업로드를 받아 주는 MIME 목록. 파일 선택 창의 `accept` 와 드롭 존의 필터가
+ * 이 하나를 함께 쓴다 — 두 경로가 서로 다른 목록을 들고 갈라지면 파일 선택
+ * 창에서는 막히는 사진이 드롭으로는 통과한다.
+ */
+export const ACCEPTED_IMAGE_TYPES = [...EXTENSIONS.keys()]
+
+/**
+ * 드롭된 목록에서 받아들일 수 있는 첫 사진을 고른다. 없으면 null.
+ *
+ * 드롭은 파일 선택 창과 달리 `accept` 로 걸러지지 않는다. 사용자가 무엇이든
+ * 끌어다 놓을 수 있으므로 — 여러 장, 텍스트 파일, 폴더(type 이 "" 로 온다),
+ * 다른 탭에서 끌어온 이미지(파일이 아예 없다) — 목록을 직접 훑는다.
+ *
+ * FileList 를 그대로 넘길 수 있도록 ArrayLike 를 받는다. node 테스트 환경에는
+ * DataTransfer 가 없어서 배열로 검증한다.
+ */
+export function pickImageFile(files: ArrayLike<File>): File | null {
+  return (
+    Array.from(files).find((file) => storageExtension(file.type) !== null) ??
+    null
+  )
+}
+
+/**
  * Storage 객체 경로의 소유자 폴더 구분자. 경로는 `<userId>/<uuid>.<ext>` 다.
  *
  * 소유자를 경로에 박아 두는 것이 이 앱의 업로드 인가 방식이다. 서명 업로드
