@@ -34,3 +34,20 @@ export async function getPlacesInBounds(
     orderBy: { imageCreationTime: "desc" },
   })
 }
+
+/**
+ * 이 사용자가 등록한 장소 **전체**. 목록 패널의 기본 화면이 "지금 보이는
+ * 영역"이 아니라 "내가 등록한 모든 장소"이므로 bounds 도 개수 상한도 두지
+ * 않는다. 지도에 그릴 마커는 여전히 getPlacesInBounds 가 맡는다.
+ *
+ * 상한을 두지 않는 것이 의도적이다. 개인이 다녀온 장소는 많아야 수백 건이고,
+ * 상한을 두면 "전체"라고 적힌 목록에서 오래된 장소가 아무 표시 없이 사라진다.
+ * 그 규모를 넘어서면 상한이 아니라 페이지네이션으로 풀 일이다.
+ */
+export async function getAllPlaces(userId: string): Promise<Place[]> {
+  return prisma.place.findMany({
+    where: { userId },
+    orderBy: { imageCreationTime: "desc" },
+  })
+}
+

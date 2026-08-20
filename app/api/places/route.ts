@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { getCurrentUserId } from "@/lib/auth"
-import { getPlacesInBounds } from "@/lib/places.server"
+import { getAllPlaces, getPlacesInBounds } from "@/lib/places.server"
 import { boundsQuerySchema } from "@/schemas/place"
 
 export async function GET(request: NextRequest) {
@@ -13,6 +13,13 @@ export async function GET(request: NextRequest) {
   }
 
   const sp = request.nextUrl.searchParams
+
+  // 목록 패널의 기본 화면은 지도 영역과 무관한 "내가 등록한 모든 장소"다.
+  // 마커용 bounds 조회와 엔드포인트를 공유하되 scope 로 갈라 둔다.
+  if (sp.get("scope") === "all") {
+    return NextResponse.json({ places: await getAllPlaces(userId) })
+  }
+
   const parsed = boundsQuerySchema.safeParse({
     swLat: sp.get("swLat"),
     swLng: sp.get("swLng"),
