@@ -5,7 +5,32 @@ import { XIcon } from "lucide-react"
 import { PlaceCard } from "@/components/place-card"
 import { PlaceCardMenu } from "@/components/place-card-menu"
 import { Button } from "@/components/ui/button"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { cn } from "@/lib/utils"
+
+/**
+ * 목록이 보여 줄 범위.
+ *
+ * `all` 이 기본이다. 지도가 담지 못하는 것 — 예전에 다녀왔지만 지금 화면
+ * 밖인 장소 — 을 찾으러 목록을 여는 것이 보통이기 때문이다. `map` 은 지도에
+ * 찍힌 마커와 정확히 같은 배열을 받는다.
+ */
+export type PlaceListScope = "all" | "map"
+
+const SCOPE_LABEL: Record<PlaceListScope, string> = {
+  all: "전체",
+  map: "지도 영역",
+}
+
+/** ToggleGroup 래퍼는 제네릭이 아니라 값이 string 으로 넓어져서 나온다. */
+function isScope(value: string | undefined): value is PlaceListScope {
+  return value === "all" || value === "map"
+}
+
+const EMPTY_MESSAGE: Record<PlaceListScope, string> = {
+  all: "아직 등록한 장소가 없습니다. 오른쪽 위 등록 버튼으로 첫 장소를 남겨 보세요.",
+  map: "이 영역에는 기록된 장소가 없습니다. 지도를 옮기거나 축소해 보세요.",
+}
 
 /**
  * 지도 위 왼쪽에서 밀려 들어오는 목록 패널.
@@ -17,11 +42,16 @@ import { cn } from "@/lib/utils"
  * 닫힘 상태에서는 화면 밖으로 밀어내기만 하므로 DOM 에 그대로 남는다.
  * 그래서 `inert` 로 탭 순서와 접근성 트리에서 빼 준다 — 없으면 보이지 않는
  * 카드들이 계속 탭 대상이 된다.
+ *
+ * `places` 가 null 이면 아직 못 불러온 상태다. 빈 배열과 갈라 두지 않으면
+ * 조회가 도는 동안 "등록한 장소가 없습니다"가 잘못 뜬다.
  */
 export function PlaceListPanel({
   ref,
   open,
   places,
+  scope,
+  onScopeChange,
   selectedId,
   onSelect,
   onEdit,
@@ -30,7 +60,9 @@ export function PlaceListPanel({
 }: {
   ref?: React.Ref<HTMLElement>
   open: boolean
-  places: Place[]
+  places: Place[] | null
+  scope: PlaceListScope
+  onScopeChange: (scope: PlaceListScope) => void
   selectedId: number | null
   onSelect: (place: Place) => void
   onEdit: (place: Place) => void
@@ -50,9 +82,11 @@ export function PlaceListPanel({
       <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
         <div className="flex items-baseline gap-2">
           <h2 className="font-heading text-base font-medium">다녀온 장소</h2>
-          <span className="text-muted-foreground text-xs tabular-nums">
-            {places.length}곳
-          </span>
+          {places && (
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {places.length}곳
+            </span>
+          )}
         </div>
         <Button
           variant="ghost"
@@ -64,11 +98,35 @@ export function PlaceListPanel({
         </Button>
       </header>
 
+      <div className="shrink-0 border-b px-4 py-2">
+        <ToggleGroup
+          aria-label="목록 범위"
+          variant="outline"
+          size="sm"
+          spacing={0}
+          value={[scope]}
+          // 눌린 항목을 다시 누르면 base-ui 가 빈 배열을 준다. 세그먼트
+          // 컨트롤에서 "아무것도 선택되지 않음"은 보여 줄 목록이 없다는
+          // 뜻이므로, 값이 비면 지금 범위를 그대로 둔다.
+          onValueChange={([value]) => {
+            if (isScope(value)) onScopeChange(value)
+          }}
+        >
+          {(Object.keys(SCOPE_LABEL) as PlaceListScope[]).map((value) => (
+            <ToggleGroupItem key={value} value={value}>
+              {SCOPE_LABEL[value]}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-        {places.length === 0 ? (
+        {places === null ? (
           <p className="text-muted-foreground text-sm">
-            이 영역에는 기록된 장소가 없습니다. 지도를 옮기거나 축소해 보세요.
+            목록을 불러오는 중입니다.
           </p>
+        ) : places.length === 0 ? (
+          <p className="text-muted-foreground text-sm">{EMPTY_MESSAGE[scope]}</p>
         ) : (
           <ul className="space-y-3">
             {places.map((place) => (
