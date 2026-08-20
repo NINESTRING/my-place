@@ -389,9 +389,9 @@ EOF
 **Interfaces:**
 - Consumes: `deletePlaceAction` (Task 2)
 - Produces:
-  - `PlaceCardMenu({ title, onEdit, onDelete }: { title: string; onEdit: () => void; onDelete: () => void })`
+  - `PlaceCardMenu({ title, onDelete }: { title: string; onDelete: () => void })` — Task 5에서 수정 항목이 붙는다
   - `DeletePlaceDialog({ open, title, onOpenChange, onConfirm, pending }: { open: boolean; title: string; onOpenChange: (open: boolean) => void; onConfirm: () => void; pending: boolean })`
-  - `PlaceListPanel` props에 `onEdit: (place: Place) => void`, `onDelete: (place: Place) => void` 추가
+  - `PlaceListPanel` props에 `onDelete: (place: Place) => void` 추가
 
 - [ ] **Step 1: dropdown-menu 를 받는다**
 
@@ -418,7 +418,7 @@ Create `src/components/place-card-menu.tsx`:
 ```tsx
 "use client"
 
-import { MoreVerticalIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import { MoreVerticalIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -438,11 +438,9 @@ import {
  */
 export function PlaceCardMenu({
   title,
-  onEdit,
   onDelete,
 }: {
   title: string
-  onEdit: () => void
   onDelete: () => void
 }) {
   return (
@@ -465,10 +463,6 @@ export function PlaceCardMenu({
       {/* 기본 팝업 폭이 트리거 폭(w-(--anchor-width))을 따라가는데 트리거가
           아이콘 버튼이라 너무 좁다. 내용에 맞춘다. */}
       <DropdownMenuContent align="end" className="w-auto">
-        <DropdownMenuItem onClick={onEdit}>
-          <PencilIcon />
-          수정
-        </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onClick={onDelete}>
           <Trash2Icon />
           삭제
@@ -555,14 +549,13 @@ import에 추가:
 import { PlaceCardMenu } from "@/components/place-card-menu"
 ```
 
-props 타입에 두 줄 추가(`onClose` 위):
+props 타입에 한 줄 추가(`onClose` 위):
 
 ```tsx
-  onEdit: (place: Place) => void
   onDelete: (place: Place) => void
 ```
 
-구조 분해에도 `onEdit`, `onDelete`를 더하고, `<li>` 블록을 통째로 교체한다.
+구조 분해에도 `onDelete`를 더하고, `<li>` 블록을 통째로 교체한다.
 
 ```tsx
               <li key={place.id} className="relative">
@@ -583,7 +576,6 @@ props 타입에 두 줄 추가(`onClose` 위):
                 <div className="absolute top-2 right-2">
                   <PlaceCardMenu
                     title={place.title}
-                    onEdit={() => onEdit(place)}
                     onDelete={() => onDelete(place)}
                   />
                 </div>
@@ -634,14 +626,11 @@ import { DeletePlaceDialog } from "@/components/delete-place-dialog"
   }
 ```
 
-`PlaceListPanel` 사용부에 두 prop을 추가한다(`onSelect` 아래).
+`PlaceListPanel` 사용부에 prop을 하나 추가한다(`onSelect` 아래).
 
 ```tsx
-        onEdit={() => {}}
         onDelete={setDeleting}
 ```
-
-> `onEdit`는 Task 5에서 채운다. 지금은 메뉴의 "수정"이 아무 일도 하지 않는다.
 
 `SignOutDialog` 아래에 모달을 추가한다.
 
@@ -671,7 +660,7 @@ Run: `npm run dev` 후 http://localhost:3000 접속(로그인 필요).
 
 - [ ] 목록 패널을 열면 각 카드 사진 오른쪽 위에 ⋮ 가 보인다
 - [ ] ⋮ 를 눌러도 지도가 그 장소로 날아가지 않는다(카드 선택이 일어나지 않는다)
-- [ ] 메뉴에 "수정"·"삭제"가 뜨고, 삭제가 붉은색이다
+- [ ] 메뉴에 "삭제"가 붉은색으로 뜬다
 - [ ] "삭제" → 확인 모달의 문구에 그 장소 제목이 들어 있다
 - [ ] 취소하면 아무 일도 일어나지 않는다
 - [ ] 삭제하면 토스트가 뜨고 목록과 지도 마커에서 사라진다
@@ -841,11 +830,16 @@ EOF
 
 **Files:**
 - Create: `src/components/edit-place-dialog.tsx`
+- Modify: `src/components/place-card-menu.tsx`
+- Modify: `src/components/place-list-panel.tsx`
 - Modify: `src/components/place-explorer.tsx`
 
 **Interfaces:**
-- Consumes: `updatePlaceAction` (Task 2), `PlaceFields` (Task 4), `placeFormSchema`·`PlaceFormValues` (기존)
-- Produces: `EditPlaceDialog({ place, onOpenChange, onUpdated }: { place: Place | null; onOpenChange: (open: boolean) => void; onUpdated: (id: number, values: PlaceFormValues) => void })`
+- Consumes: `updatePlaceAction` (Task 2), `PlaceCardMenu`·`PlaceListPanel` (Task 3), `PlaceFields` (Task 4), `placeFormSchema`·`PlaceFormValues` (기존)
+- Produces:
+  - `EditPlaceDialog({ place, onOpenChange, onUpdated }: { place: Place | null; onOpenChange: (open: boolean) => void; onUpdated: (id: number, values: PlaceFormValues) => void })`
+  - `PlaceCardMenu` props에 `onEdit: () => void` 추가
+  - `PlaceListPanel` props에 `onEdit: (place: Place) => void` 추가
 
 - [ ] **Step 1: EditPlaceDialog 를 만든다**
 
@@ -973,7 +967,27 @@ export function EditPlaceDialog({
 }
 ```
 
-- [ ] **Step 2: 지도 화면에 배선한다**
+- [ ] **Step 2: 메뉴에 수정 항목을 더한다**
+
+`src/components/place-card-menu.tsx`를 고친다.
+
+- import: `import { MoreVerticalIcon, PencilIcon, Trash2Icon } from "lucide-react"`
+- props 타입에 `onEdit: () => void` 를 더하고 구조 분해에도 더한다
+- `DropdownMenuContent` 안, 삭제 항목 **위**에 넣는다:
+
+```tsx
+        <DropdownMenuItem onClick={onEdit}>
+          <PencilIcon />
+          수정
+        </DropdownMenuItem>
+```
+
+`src/components/place-list-panel.tsx`를 고친다.
+
+- props 타입에 `onEdit: (place: Place) => void` 를 더하고(`onDelete` 위) 구조 분해에도 더한다
+- `PlaceCardMenu` 사용부에 `onEdit={() => onEdit(place)}` 를 더한다(`title` 아래)
+
+- [ ] **Step 3: 지도 화면에 배선한다**
 
 `src/components/place-explorer.tsx`를 고친다.
 
@@ -1026,15 +1040,16 @@ import type { PlaceFormValues } from "@/schemas/place"
       />
 ```
 
-- [ ] **Step 3: 타입 검사와 테스트**
+- [ ] **Step 4: 타입 검사와 테스트**
 
 Run: `npx tsc --noEmit && npm test`
 Expected: tsc 출력 없음, 테스트 92개 통과
 
-- [ ] **Step 4: 브라우저에서 확인한다**
+- [ ] **Step 5: 브라우저에서 확인한다**
 
 Run: `npm run dev`
 
+- [ ] 메뉴에 "수정"이 "삭제" 위에 뜬다
 - [ ] ⋮ → "수정" 을 누르면 현재 제목·설명·카테고리가 채워진 모달이 뜬다
 - [ ] 제목을 지우고 저장하면 "제목을 입력해 주세요"가 뜨고 모달이 닫히지 않는다
 - [ ] 제목을 고쳐 저장하면 토스트가 뜨고 목록 카드의 제목이 바뀐다
@@ -1044,10 +1059,10 @@ Run: `npm run dev`
 - [ ] 다른 장소의 ⋮ → 수정을 열면 그 장소의 값으로 바뀌어 있다(앞 장소의 값이 남지 않는다)
 - [ ] 취소로 닫고 다시 열면 고치다 만 값이 아니라 저장된 값이 보인다
 
-- [ ] **Step 5: 커밋**
+- [ ] **Step 6: 커밋**
 
 ```bash
-git add src/components/edit-place-dialog.tsx src/components/place-explorer.tsx
+git add src/components/edit-place-dialog.tsx src/components/place-card-menu.tsx src/components/place-list-panel.tsx src/components/place-explorer.tsx
 git commit -m "$(cat <<'EOF'
 feat: Add/장소 수정 모달을 더한다
 
