@@ -395,8 +395,11 @@ export function PlaceExplorer({
                   shrink-to-fit 으로 둔다. 폭을 정하는 것이 사실상 제목
                   한 줄뿐이라 그냥 두면 장소마다 팝업 크기가 달라진다.
                   내용 폭을 고정해서 항상 같은 크기로 뜨게 한다.
-                  (240px + 좌우 패딩 10px = 위 maxWidth 260px) */}
-              <div className="w-60 space-y-2">
+                  (240px + 좌우 패딩 10px = 위 maxWidth 260px)
+
+                  폰에서는 240px 정사각 사진이 화면 폭의 3분의 2를 덮어 지도가
+                  거의 보이지 않는다. 좁은 화면에서만 176px 로 줄인다. */}
+              <div className="w-44 space-y-2 sm:w-60">
                 {/* 닫기 버튼이 오른쪽 위 모서리를 차지하므로 그만큼 자리를
                     비워 두고, 넘치는 제목은 두 줄로 흐르는 대신 말줄임한다. */}
                 <p className="truncate pr-7 font-medium">{selected.title}</p>
@@ -405,7 +408,7 @@ export function PlaceExplorer({
                     src={publicImageUrl(selected.image)}
                     alt={selected.title}
                     fill
-                    sizes="240px"
+                    sizes="(max-width: 639px) 176px, 240px"
                     className="object-cover"
                   />
                 </div>

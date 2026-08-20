@@ -75,7 +75,9 @@ export function PlaceListPanel({
       aria-label="장소 목록"
       inert={!open}
       className={cn(
-        "bg-background/95 absolute inset-y-0 left-0 z-20 flex w-[min(22rem,82vw)] flex-col backdrop-blur transition-transform duration-300 ease-out",
+        // 폰에서는 패널이 화면을 거의 다 덮으면 "지도를 덮지 않는다"는
+        // 전제가 무너진다. 좁은 화면에서만 폭을 더 줄여 지도가 옆에 남게 한다.
+        "bg-background/95 absolute inset-y-0 left-0 z-20 flex w-[min(22rem,70vw)] flex-col backdrop-blur transition-transform duration-300 ease-out",
         open ? "translate-x-0 shadow-2xl" : "-translate-x-full"
       )}
     >
@@ -144,8 +146,12 @@ export function PlaceListPanel({
 
                 {/* 메뉴를 카드 버튼 *안* 에 넣으면 버튼 중첩이라 마크업이
                     무효가 되고, 메뉴를 여는 클릭이 바깥 버튼으로 새어 나가
-                    지도가 함께 날아간다. 형제로 두고 위치만 겹친다. */}
-                <div className="absolute top-2 right-2">
+                    지도가 함께 날아간다. 형제로 두고 위치만 겹친다.
+
+                    폰에서는 카드가 가로로 눕고 오른쪽 위가 날짜 줄이므로,
+                    사진 위(왼쪽 위)로 옮긴다. 좁은 화면에서 글자와 자리를
+                    다투지 않게 하려는 것이다. */}
+                <div className="absolute top-2 left-2 sm:right-2 sm:left-auto">
                   <PlaceCardMenu
                     title={place.title}
                     onEdit={() => onEdit(place)}
