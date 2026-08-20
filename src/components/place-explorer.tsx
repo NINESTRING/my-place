@@ -30,6 +30,7 @@ import { signOutAction } from "@/actions/auth"
 import { deletePlaceAction } from "@/actions/place"
 import { CreatePlaceDialog } from "@/components/create-place-dialog"
 import { DeletePlaceDialog } from "@/components/delete-place-dialog"
+import { EditPlaceDialog } from "@/components/edit-place-dialog"
 import { LoginDialog, type LoginReason } from "@/components/login-dialog"
 import { PlaceListPanel } from "@/components/place-list-panel"
 import { SignOutDialog } from "@/components/sign-out-dialog"
@@ -38,7 +39,7 @@ import { useLastData } from "@/hooks/use-last-data"
 import { useLocalState } from "@/hooks/use-local-state"
 import { publicImageUrl } from "@/lib/images"
 import { revivePlace, type SerializedPlace } from "@/lib/places"
-import type { Bounds } from "@/schemas/place"
+import type { Bounds, PlaceFormValues } from "@/schemas/place"
 
 if (typeof window !== "undefined") {
   setWorkerUrl("/maplibre/maplibre-gl-worker.mjs")
@@ -88,6 +89,7 @@ export function PlaceExplorer({
   const [signingOut, startSignOut] = useTransition()
   const [deleting, setDeleting] = useState<Place | null>(null)
   const [deletePending, startDelete] = useTransition()
+  const [editing, setEditing] = useState<Place | null>(null)
   const [viewport, setViewport, viewportHydrated] = useLocalState<Viewport>(
     "viewport",
     DEFAULT_VIEWPORT
@@ -197,6 +199,20 @@ export function PlaceExplorer({
     }
     setLoginReason(reason)
     setLoginOpen(true)
+  }
+
+  const onUpdated = (id: number, values: PlaceFormValues) => {
+    setEditing(null)
+    // 재조회는 디바운스와 네트워크를 거친다. 그동안 팝업이 옛 제목을 들고
+    // 있으면 방금 고친 값이 그대로인 것처럼 보인다. 선택된 장소만 먼저
+    // 겹쳐 쓴다. description 은 폼이 undefined 로 접어 오므로 DB 표현인
+    // null 로 되돌린다.
+    setSelected((prev) =>
+      prev?.id === id
+        ? { ...prev, ...values, description: values.description ?? null }
+        : prev
+    )
+    setReloadToken((n) => n + 1)
   }
 
   const onDeleteConfirmed = () => {
@@ -356,6 +372,7 @@ export function PlaceExplorer({
         places={shownPlaces}
         selectedId={selected?.id ?? null}
         onSelect={onSelectFromList}
+        onEdit={setEditing}
         onDelete={setDeleting}
         onClose={() => setListOpen(false)}
       />
@@ -382,6 +399,14 @@ export function PlaceExplorer({
         }}
         onConfirm={onSignOutConfirmed}
         pending={signingOut}
+      />
+
+      <EditPlaceDialog
+        place={editing}
+        onOpenChange={(next) => {
+          if (!next) setEditing(null)
+        }}
+        onUpdated={onUpdated}
       />
 
       <DeletePlaceDialog

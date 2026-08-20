@@ -1,6 +1,6 @@
 "use client"
 
-import { MoreVerticalIcon, Trash2Icon } from "lucide-react"
+import { MoreVerticalIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -20,9 +20,11 @@ import {
  */
 export function PlaceCardMenu({
   title,
+  onEdit,
   onDelete,
 }: {
   title: string
+  onEdit: () => void
   onDelete: () => void
 }) {
   return (
@@ -45,6 +47,10 @@ export function PlaceCardMenu({
       {/* 기본 팝업 폭이 트리거 폭(w-(--anchor-width))을 따라가는데 트리거가
           아이콘 버튼이라 너무 좁다. 내용에 맞춘다. */}
       <DropdownMenuContent align="end" className="w-auto">
+        <DropdownMenuItem onClick={onEdit}>
+          <PencilIcon />
+          수정
+        </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onClick={onDelete}>
           <Trash2Icon />
           삭제

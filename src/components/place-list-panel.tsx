@@ -24,6 +24,7 @@ export function PlaceListPanel({
   places,
   selectedId,
   onSelect,
+  onEdit,
   onDelete,
   onClose,
 }: {
@@ -32,6 +33,7 @@ export function PlaceListPanel({
   places: Place[]
   selectedId: number | null
   onSelect: (place: Place) => void
+  onEdit: (place: Place) => void
   onDelete: (place: Place) => void
   onClose: () => void
 }) {
@@ -88,6 +90,7 @@ export function PlaceListPanel({
                 <div className="absolute top-2 right-2">
                   <PlaceCardMenu
                     title={place.title}
+                    onEdit={() => onEdit(place)}
                     onDelete={() => onDelete(place)}
                   />
                 </div>
