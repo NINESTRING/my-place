@@ -15,14 +15,11 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from "react"
-import { Controller, useForm } from "react-hook-form"
+import { useForm } from "react-hook-form"
 import Map, { Marker, type MapRef } from "react-map-gl/maplibre"
 import { toast } from "sonner"
-import { CategoryPicker } from "@/components/category-picker"
 import { Button } from "@/components/ui/button"
-import { Field, FieldError, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { PlaceFields } from "@/components/place-fields"
 import { createPlaceAction, createUploadUrlAction } from "@/actions/place"
 import {
   ACCEPTED_IMAGE_TYPES,
@@ -342,56 +339,7 @@ export function PlaceForm({
         </div>
       )}
 
-      <Field>
-        <FieldLabel htmlFor="title">제목</FieldLabel>
-        <Controller
-          control={control}
-          name="title"
-          render={({ field }) => (
-            <Input id="title" placeholder="장소 이름" {...field} />
-          )}
-        />
-        <FieldError errors={[errors.title]} />
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="description">
-          설명{" "}
-          <span className="text-muted-foreground font-normal">(선택)</span>
-        </FieldLabel>
-        <Controller
-          control={control}
-          name="description"
-          render={({ field }) => (
-            <Textarea
-              id="description"
-              placeholder="이 장소는 어땠나요? (비워 둘 수 있어요)"
-              rows={3}
-              {...field}
-            />
-          )}
-        />
-        <FieldError errors={[errors.description]} />
-      </Field>
-
-      <Field>
-        <FieldLabel id="category-label">
-          카테고리{" "}
-          <span className="text-muted-foreground font-normal">(선택)</span>
-        </FieldLabel>
-        <Controller
-          control={control}
-          name="category"
-          render={({ field }) => (
-            <CategoryPicker
-              value={field.value}
-              onChange={field.onChange}
-              labelId="category-label"
-            />
-          )}
-        />
-        <FieldError errors={[errors.category]} />
-      </Field>
+      <PlaceFields control={control} errors={errors} />
 
       <Button type="submit" disabled={submitting} className="w-full">
         {submitting ? "저장 중…" : "저장"}

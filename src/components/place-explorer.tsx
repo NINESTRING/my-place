@@ -24,9 +24,13 @@ import Map, {
   type MapRef,
   type ViewStateChangeEvent,
 } from "react-map-gl/maplibre"
+import { toast } from "sonner"
 import { useDebounce } from "use-debounce"
 import { signOutAction } from "@/actions/auth"
+import { deletePlaceAction } from "@/actions/place"
 import { CreatePlaceDialog } from "@/components/create-place-dialog"
+import { DeletePlaceDialog } from "@/components/delete-place-dialog"
+import { EditPlaceDialog } from "@/components/edit-place-dialog"
 import { LoginDialog, type LoginReason } from "@/components/login-dialog"
 import { PlaceListPanel } from "@/components/place-list-panel"
 import { SignOutDialog } from "@/components/sign-out-dialog"
@@ -35,7 +39,7 @@ import { useLastData } from "@/hooks/use-last-data"
 import { useLocalState } from "@/hooks/use-local-state"
 import { publicImageUrl } from "@/lib/images"
 import { revivePlace, type SerializedPlace } from "@/lib/places"
-import type { Bounds } from "@/schemas/place"
+import type { Bounds, PlaceFormValues } from "@/schemas/place"
 
 if (typeof window !== "undefined") {
   setWorkerUrl("/maplibre/maplibre-gl-worker.mjs")
@@ -83,6 +87,9 @@ export function PlaceExplorer({
   const [loginOpen, setLoginOpen] = useState(false)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, startSignOut] = useTransition()
+  const [deleting, setDeleting] = useState<Place | null>(null)
+  const [deletePending, startDelete] = useTransition()
+  const [editing, setEditing] = useState<Place | null>(null)
   const [viewport, setViewport, viewportHydrated] = useLocalState<Viewport>(
     "viewport",
     DEFAULT_VIEWPORT
@@ -194,6 +201,48 @@ export function PlaceExplorer({
     setLoginOpen(true)
   }
 
+  const onUpdated = (id: number, values: PlaceFormValues) => {
+    setEditing(null)
+    // 재조회는 디바운스와 네트워크를 거친다. 그동안 팝업이 옛 제목을 들고
+    // 있으면 방금 고친 값이 그대로인 것처럼 보인다. 선택된 장소만 먼저
+    // 겹쳐 쓴다. description 은 폼이 undefined 로 접어 오므로 DB 표현인
+    // null 로 되돌린다.
+    setSelected((prev) =>
+      prev?.id === id
+        ? { ...prev, ...values, description: values.description ?? null }
+        : prev
+    )
+    setReloadToken((n) => n + 1)
+  }
+
+  const onDeleteConfirmed = () => {
+    const target = deleting
+    if (!target) return
+
+    startDelete(async () => {
+      try {
+        const result = await deletePlaceAction(target.id)
+        if (!result.ok) {
+          toast.error(result.error)
+          return
+        }
+
+        setDeleting(null)
+        // 지운 장소의 팝업이 떠 있으면 참조가 사라진 카드가 지도에 남는다.
+        setSelected((prev) => (prev?.id === target.id ? null : prev))
+        // 이 화면의 목록은 RSC 가 아니라 /api/places 로 가져오므로
+        // revalidatePath 로는 갱신되지 않는다. 토큰을 올려 다시 부른다.
+        setReloadToken((n) => n + 1)
+        toast.success("장소를 삭제했습니다.")
+      } catch {
+        // useTransition 은 reject 해도 isPending 을 풀어 주므로 모달이
+        // 잠기지는 않는다. 하지만 감싸지 않으면 사용자는 아무 안내도 없이
+        // 그냥 실패를 겪는다.
+        toast.error("삭제 중 문제가 발생했습니다.")
+      }
+    })
+  }
+
   const onSignOutConfirmed = () => {
     startSignOut(async () => {
       await signOutAction()
@@ -222,6 +271,9 @@ export function PlaceExplorer({
           ref={mapRef}
           initialViewState={viewport}
           onMoveEnd={onMoveEnd}
+          // 지도의 빈 곳을 누르면 팝업의 x 를 누른 것과 같이 닫는다. 마커
+          // 클릭은 아래에서 전파를 끊으므로 여기까지 오지 않는다.
+          onClick={() => setSelected(null)}
           mapStyle="https://tiles.openfreemap.org/styles/liberty"
           style={{ width: "100%", height: "100%" }}
         >
@@ -231,7 +283,14 @@ export function PlaceExplorer({
               latitude={place.latitude}
               longitude={place.longitude}
               color="#ef4444"
-              onClick={() => setSelected(place)}
+              onClick={(e) => {
+                // 마커 엘리먼트는 지도의 캔버스 컨테이너 안에 붙고(maplibre
+                // Marker.addTo 참고) 지도의 click 리스너도 같은 컨테이너에
+                // 걸린다. 전파를 끊지 않으면 마커를 고른 직후 Map 의
+                // onClick 이 곧바로 선택을 지운다.
+                e.originalEvent.stopPropagation()
+                setSelected(place)
+              }}
             />
           ))}
 
@@ -243,14 +302,21 @@ export function PlaceExplorer({
               closeOnClick={false}
               maxWidth="260px"
             >
-              <div className="space-y-2">
-                <p className="font-medium">{selected.title}</p>
+              {/* maplibre 는 팝업 컨테이너에 max-width 만 걸고 폭은
+                  shrink-to-fit 으로 둔다. 폭을 정하는 것이 사실상 제목
+                  한 줄뿐이라 그냥 두면 장소마다 팝업 크기가 달라진다.
+                  내용 폭을 고정해서 항상 같은 크기로 뜨게 한다.
+                  (240px + 좌우 패딩 10px = 위 maxWidth 260px) */}
+              <div className="w-60 space-y-2">
+                {/* 닫기 버튼이 오른쪽 위 모서리를 차지하므로 그만큼 자리를
+                    비워 두고, 넘치는 제목은 두 줄로 흐르는 대신 말줄임한다. */}
+                <p className="truncate pr-7 font-medium">{selected.title}</p>
                 <div className="relative aspect-square w-full overflow-hidden rounded">
                   <Image
                     src={publicImageUrl(selected.image)}
                     alt={selected.title}
                     fill
-                    sizes="260px"
+                    sizes="240px"
                     className="object-cover"
                   />
                 </div>
@@ -313,6 +379,8 @@ export function PlaceExplorer({
         places={shownPlaces}
         selectedId={selected?.id ?? null}
         onSelect={onSelectFromList}
+        onEdit={setEditing}
+        onDelete={setDeleting}
         onClose={() => setListOpen(false)}
       />
 
@@ -338,6 +406,27 @@ export function PlaceExplorer({
         }}
         onConfirm={onSignOutConfirmed}
         pending={signingOut}
+      />
+
+      <EditPlaceDialog
+        place={editing}
+        onOpenChange={(next) => {
+          if (!next) setEditing(null)
+        }}
+        onUpdated={onUpdated}
+      />
+
+      <DeletePlaceDialog
+        open={deleting !== null}
+        title={deleting?.title ?? ""}
+        // 삭제가 진행 중일 때는 바깥 클릭·Esc 로 닫히지 않게 한다. 닫혀도
+        // 액션은 계속 진행되므로 "취소한 것처럼 보이는데 지워지는" 상태가
+        // 생긴다. 로그아웃 모달과 같은 처리다.
+        onOpenChange={(next) => {
+          if (!deletePending && !next) setDeleting(null)
+        }}
+        onConfirm={onDeleteConfirmed}
+        pending={deletePending}
       />
     </div>
   )

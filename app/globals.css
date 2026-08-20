@@ -129,3 +129,28 @@
     @apply font-sans;
     }
 }
+
+/* maplibre 기본 팝업 닫기 버튼은 13px 짜리 x 글자 하나가 모서리에 딱 붙어
+   있어서 커서로도 손가락으로도 겨냥하기 어렵다. 내용에서 살짝 띄운 원형
+   버튼으로 키워 최소 터치 영역에 가깝게 만든다.
+   maplibre 의 CSS 는 지도 컴포넌트가 직접 import 하므로 이 파일과의 순서를
+   보장할 수 없다. 클래스를 하나 더 겹쳐 우선순위로 이긴다. */
+.maplibregl-popup .maplibregl-popup-close-button {
+  top: 0.25rem;
+  right: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  font-size: 1.125rem;
+  line-height: 1;
+  color: var(--muted-foreground);
+}
+
+.maplibregl-popup .maplibregl-popup-close-button:hover,
+.maplibregl-popup .maplibregl-popup-close-button:focus-visible {
+  background-color: var(--accent);
+  color: var(--foreground);
+}
