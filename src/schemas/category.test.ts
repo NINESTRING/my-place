@@ -3,6 +3,7 @@ import {
   categoryIdSchema,
   categoryNameSchema,
   categoryUpdateSchema,
+  categorySharingSchema,
 } from "@/schemas/category"
 
 describe("categoryNameSchema", () => {
@@ -72,5 +73,34 @@ describe("categoryUpdateSchema", () => {
 
   it("id 가 없으면 거부한다", () => {
     expect(categoryUpdateSchema.safeParse({ name: "전시" }).success).toBe(false)
+  })
+})
+
+describe("categorySharingSchema", () => {
+  it("id 와 enabled 를 받는다", () => {
+    expect(
+      categorySharingSchema.safeParse({ id: 3, enabled: true }).success
+    ).toBe(true)
+    expect(
+      categorySharingSchema.safeParse({ id: 3, enabled: false }).success
+    ).toBe(true)
+  })
+
+  it("enabled 는 진짜 불리언만 받는다 — 문자열 'true' 는 거부", () => {
+    expect(
+      categorySharingSchema.safeParse({ id: 3, enabled: "true" }).success
+    ).toBe(false)
+  })
+
+  it("id 규칙은 다른 액션과 같다 — 0·음수·소수 거부", () => {
+    expect(
+      categorySharingSchema.safeParse({ id: 0, enabled: true }).success
+    ).toBe(false)
+    expect(
+      categorySharingSchema.safeParse({ id: -1, enabled: true }).success
+    ).toBe(false)
+    expect(
+      categorySharingSchema.safeParse({ id: 1.5, enabled: true }).success
+    ).toBe(false)
   })
 })

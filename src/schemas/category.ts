@@ -24,3 +24,13 @@ export const categoryUpdateSchema = z.object({
   id: categoryIdSchema,
   name: categoryNameSchema,
 })
+
+/**
+ * 공유 켜기/끄기 액션의 입력. enabled 를 z.coerce 로 받지 않는 이유는
+ * categoryIdSchema 와 같다 — 액션 인자는 클라이언트가 보낸 값이고, 강제
+ * 변환은 "false" 같은 진실 아닌 값을 true 로 접는다.
+ */
+export const categorySharingSchema = z.object({
+  id: categoryIdSchema,
+  enabled: z.boolean(),
+})
