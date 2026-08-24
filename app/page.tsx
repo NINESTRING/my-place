@@ -2,9 +2,8 @@ import { AuthErrorToast } from "@/components/auth-error-toast"
 import { PlaceExplorer } from "@/components/place-explorer"
 import { getCurrentUserId } from "@/lib/auth"
 import { getCategories } from "@/lib/categories.server"
-import { boundsAround } from "@/lib/places"
+import { boundsAround, FALLBACK_BOUNDS } from "@/lib/places"
 import { getLatestPlace, getPlacesInBounds } from "@/lib/places.server"
-import type { Bounds } from "@/schemas/place"
 
 // 지도에 보이는 장소는 매 요청마다 최신 DB 상태를 반영해야 하므로 정적
 // 프리렌더를 명시적으로 끈다. 이 설정이 없으면 next build 가 빌드 시점에 이
@@ -12,13 +11,6 @@ import type { Bounds } from "@/schemas/place"
 // 시도한다(이 환경처럼 DATABASE_URL 이 없으면 빌드 자체가 실패한다).
 export const dynamic = "force-dynamic"
 
-// 보여 줄 장소도 저장된 위치도 없을 때 쓰는 범위. 클라이언트는 마운트 직후
-// localStorage 에 저장된 마지막 위치로 다시 조회하므로, 여기서는 수도권
-// 전체를 덮는 넉넉한 값이면 된다.
-const FALLBACK_BOUNDS: Bounds = {
-  sw: { latitude: 37, longitude: 126 },
-  ne: { latitude: 38, longitude: 128 },
-}
 
 export default async function HomePage() {
   // 로그인하지 않았으면 조회 자체를 하지 않는다. 이 앱의 장소는 등록한

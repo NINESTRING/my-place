@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { boundsAround, revivePlace, type SerializedPlace } from "@/lib/places"
+import { boundsAround, boundsOf, revivePlace, type SerializedPlace } from "@/lib/places"
 
 describe("revivePlace", () => {
   const serialized: SerializedPlace = {
@@ -60,5 +60,31 @@ describe("boundsAround", () => {
 
     const south = boundsAround({ latitude: -89.98, longitude: 0 })
     expect(south.sw.latitude).toBe(-90)
+  })
+})
+
+describe("boundsOf", () => {
+  it("모든 점을 덮는 최소 상자를 돌려준다", () => {
+    const bounds = boundsOf([
+      { latitude: 37.5, longitude: 127.0 },
+      { latitude: 35.1, longitude: 129.0 },
+      { latitude: 36.3, longitude: 126.5 },
+    ])
+    expect(bounds).toEqual({
+      sw: { latitude: 35.1, longitude: 126.5 },
+      ne: { latitude: 37.5, longitude: 129.0 },
+    })
+  })
+
+  it("점이 하나면 넓이 0 인 상자다 — fitBounds 의 maxZoom 이 확대를 막는다", () => {
+    const bounds = boundsOf([{ latitude: 37.5, longitude: 127.0 }])
+    expect(bounds).toEqual({
+      sw: { latitude: 37.5, longitude: 127.0 },
+      ne: { latitude: 37.5, longitude: 127.0 },
+    })
+  })
+
+  it("점이 없으면 null — 호출부가 기본 범위로 대체한다", () => {
+    expect(boundsOf([])).toBeNull()
   })
 })

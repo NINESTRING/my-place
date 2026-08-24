@@ -56,3 +56,42 @@ export function boundsAround(center: Coordinates): Bounds {
     },
   }
 }
+
+/**
+ * 보여 줄 장소도 저장된 위치도 없을 때 쓰는 범위(수도권 전체). 홈은
+ * 클라이언트가 저장된 위치로 곧 다시 조회하므로 넉넉하면 되고, 공유
+ * 페이지는 빈 카테고리일 때 이 범위를 그대로 띄운다.
+ */
+export const FALLBACK_BOUNDS: Bounds = {
+  sw: { latitude: 37, longitude: 126 },
+  ne: { latitude: 38, longitude: 128 },
+}
+
+/**
+ * 점들 전체를 덮는 최소 상자. 공유 페이지가 첫 화면을 "이 카테고리의 모든
+ * 장소가 보이는 범위"로 띄우는 데 쓴다. 빈 배열이면 null — 지도 초기화에
+ * 쓰이는 값이라 "0 개의 점을 덮는 상자"라는 거짓 값을 만들지 않는다.
+ * 날짜변경선을 넘는 분포는 boundsAround 와 같은 이유로 다루지 않는다.
+ */
+export function boundsOf(points: readonly Coordinates[]): Bounds | null {
+  const first = points[0]
+  if (!first) return null
+
+  let bounds = {
+    sw: { latitude: first.latitude, longitude: first.longitude },
+    ne: { latitude: first.latitude, longitude: first.longitude },
+  }
+  for (const point of points) {
+    bounds = {
+      sw: {
+        latitude: Math.min(bounds.sw.latitude, point.latitude),
+        longitude: Math.min(bounds.sw.longitude, point.longitude),
+      },
+      ne: {
+        latitude: Math.max(bounds.ne.latitude, point.latitude),
+        longitude: Math.max(bounds.ne.longitude, point.longitude),
+      },
+    }
+  }
+  return bounds
+}
