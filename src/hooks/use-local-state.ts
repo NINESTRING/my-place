@@ -18,14 +18,19 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from "react"
  */
 export function useLocalState<S>(
   key: string,
-  initial: S
+  initial: S,
+  // 공유 화면처럼 "이 화면의 상태는 브라우저에 남기지 않는다"가 필요한
+  // 호출부용. false 면 일반 useState 로 동작한다 — hydrated 를 처음부터
+  // true 로 두는 것은 읽기 effect 자체가 없어 기다릴 것이 없기 때문이다.
+  persist = true
 ): [S, Dispatch<SetStateAction<S>>, boolean, boolean] {
   const [value, setValue] = useState<S>(initial)
-  const [hydrated, setHydrated] = useState(false)
+  const [hydrated, setHydrated] = useState(!persist)
   const [restored, setRestored] = useState(false)
 
   // 서버 렌더 결과와 어긋나지 않도록 마운트 이후에 읽는다.
   useEffect(() => {
+    if (!persist) return
     const saved = window.localStorage.getItem(key)
     if (saved !== null) {
       try {
@@ -36,11 +41,12 @@ export function useLocalState<S>(
       }
     }
     setHydrated(true)
-  }, [key])
+  }, [key, persist])
 
   useEffect(() => {
+    if (!persist) return
     window.localStorage.setItem(key, JSON.stringify(value))
-  }, [key, value])
+  }, [key, persist, value])
 
   return [value, setValue, hydrated, restored]
 }

@@ -104,6 +104,7 @@ export function PlaceExplorer({
   initialCenter,
   initialCategories,
   isAuthenticated,
+  share = null,
 }: {
   initialPlaces: PlaceWithCategories[]
   initialBounds: Bounds
@@ -112,7 +113,14 @@ export function PlaceExplorer({
   /** 내가 만든 카테고리 전부. 등록·수정 폼의 선택지가 된다. */
   initialCategories: CategoryWithShare[]
   isAuthenticated: boolean
+  /**
+   * 공유 화면(/share/[token]) 모드. 값이 있으면 읽기 전용이 된다 — 쓰기
+   * UI 와 재조회를 전부 끄고, initialPlaces 만으로 그린다. 방문자는
+   * 미인증이므로 isAuthenticated 는 항상 false 로 함께 온다.
+   */
+  share?: { categoryName: string } | null
 }) {
+  const isShare = share !== null
   const mapRef = useRef<MapRef>(null)
   const panelRef = useRef<HTMLElement>(null)
   // 현재 위치는 한 세션에 한 번만 묻는다. 이 컴포넌트는 서버 액션 뒤의
@@ -139,9 +147,16 @@ export function PlaceExplorer({
   const [viewport, setViewport, viewportHydrated, viewportRestored] =
     useLocalState<Viewport>(
       "viewport",
-      initialCenter ? { ...initialCenter, zoom: FOCUS_ZOOM } : DEFAULT_VIEWPORT
+      initialCenter
+        ? { ...initialCenter, zoom: FOCUS_ZOOM }
+        : DEFAULT_VIEWPORT,
+      !isShare
     )
-  const [bounds, setBounds] = useLocalState<Bounds>("bounds", initialBounds)
+  const [bounds, setBounds] = useLocalState<Bounds>(
+    "bounds",
+    initialBounds,
+    !isShare
+  )
 
   // 옛 버전은 bounds 를 "[[lng,lat],[lng,lat]]" 문자열로 저장했다.
   // 형식이 맞지 않으면 초기값으로 되돌린다.
@@ -163,7 +178,9 @@ export function PlaceExplorer({
   // 목록 패널의 기본 범위인 "내가 등록한 모든 장소". 마커용 bounds 조회와
   // 달리 지도를 움직여도 다시 부르지 않으므로 따로 들고 있는다. null 은 아직
   // 못 불러왔다는 뜻이고, 패널이 그 상태를 "장소 없음"과 갈라 보여 준다.
-  const [allPlaces, setAllPlaces] = useState<PlaceWithCategories[] | null>(null)
+  const [allPlaces, setAllPlaces] = useState<PlaceWithCategories[] | null>(
+    isShare ? initialPlaces : null
+  )
   const everyPlace = useLastData(allPlaces)
 
   // 저장 직후처럼 bounds 는 그대로인데 서버 데이터만 바뀐 경우를 위한 값이다.
@@ -172,6 +189,10 @@ export function PlaceExplorer({
   const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
+    // 공유 화면은 서버가 내려준 장소가 전부다. /api/places 는 세션 스코프라
+    // 방문자에게 어차피 빈 배열을 줄 뿐이고, 마커가 지워지기만 한다.
+    if (isShare) return
+
     const controller = new AbortController()
 
     void fetchPlaces(toQuery(debouncedBounds), controller.signal).then(
@@ -181,9 +202,13 @@ export function PlaceExplorer({
     )
 
     return () => controller.abort()
-  }, [debouncedBounds, reloadToken])
+  }, [debouncedBounds, reloadToken, isShare])
 
   useEffect(() => {
+    // 공유 화면은 서버가 내려준 장소가 전부다. /api/places 는 세션 스코프라
+    // 방문자에게 어차피 빈 배열을 줄 뿐이고, 마커가 지워지기만 한다.
+    if (isShare) return
+
     // 미인증이면 서버가 어차피 빈 목록을 준다. 요청을 아끼는 동시에,
     // 로그아웃 직후 남아 있던 남의 목록을 이 자리에서 비운다.
     if (!isAuthenticated) {
@@ -198,9 +223,11 @@ export function PlaceExplorer({
     })
 
     return () => controller.abort()
-  }, [isAuthenticated, reloadToken])
+  }, [isAuthenticated, reloadToken, isShare])
 
   useEffect(() => {
+    if (isShare) return
+
     // 저장된 위치도 다녀온 장소도 없을 때 — 즉 띄울 근거가 하나도 없을 때만 —
     // 현재 위치를 묻는다. 권한 프롬프트는 사용자를 멈춰 세우므로 지도를 띄우기
     // 전에 기다리지 않고, 답이 오면 그때 옮긴다. 거부하거나 실패하면 기본
@@ -235,7 +262,7 @@ export function PlaceExplorer({
     return () => {
       cancelled = true
     }
-  }, [viewportHydrated, viewportRestored, initialCenter])
+  }, [viewportHydrated, viewportRestored, initialCenter, isShare])
 
   const onMoveEnd = (e: ViewStateChangeEvent) => {
     const b = e.target.getBounds()
@@ -396,7 +423,19 @@ export function PlaceExplorer({
       {viewportHydrated ? (
         <Map
           ref={mapRef}
-          initialViewState={viewport}
+          // 공유 화면은 "이 카테고리의 모든 장소가 보이는 범위"에서 시작한다.
+          // 장소가 하나거나 몰려 있으면 maxZoom 이 과확대를 막는다.
+          initialViewState={
+            isShare
+              ? {
+                  bounds: [
+                    [initialBounds.sw.longitude, initialBounds.sw.latitude],
+                    [initialBounds.ne.longitude, initialBounds.ne.latitude],
+                  ],
+                  fitBoundsOptions: { padding: 60, maxZoom: FOCUS_ZOOM },
+                }
+              : viewport
+          }
           onMoveEnd={onMoveEnd}
           // 지도의 빈 곳을 누르면 팝업의 x 를 누른 것과 같이 닫는다. 마커
           // 클릭은 아래에서 전파를 끊으므로 여기까지 오지 않는다.
@@ -462,46 +501,71 @@ export function PlaceExplorer({
           열려 있어도 버튼을 가리지 않고, 지도 저작권 표시(오른쪽 아래)와도
           겹치지 않는다. */}
       <div className="absolute top-4 right-4 z-30 flex flex-col gap-2">
-        <Button
-          onClick={() => gated("create", () => setCreateOpen(true))}
-          aria-label="장소 등록"
-          className="size-11 rounded-full shadow-lg"
-        >
-          <MapPinPlusIcon className="size-5" />
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => gated("list", () => setListOpen((open) => !open))}
-          aria-label="장소 목록"
-          aria-pressed={listOpen}
-          className="size-11 rounded-full shadow-lg"
-        >
-          <ListIcon className="size-5" />
-        </Button>
-
-        {isAuthenticated ? (
+        {isShare ? (
           <Button
             variant="outline"
-            onClick={() => setSignOutOpen(true)}
-            aria-label="로그아웃"
+            onClick={() => setListOpen((open) => !open)}
+            aria-label="장소 목록"
+            aria-pressed={listOpen}
             className="size-11 rounded-full shadow-lg"
           >
-            <LogOutIcon className="size-5" />
+            <ListIcon className="size-5" />
           </Button>
         ) : (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setLoginReason(null)
-              setLoginOpen(true)
-            }}
-            aria-label="로그인"
-            className="size-11 rounded-full shadow-lg"
-          >
-            <LogInIcon className="size-5" />
-          </Button>
+          <>
+            <Button
+              onClick={() => gated("create", () => setCreateOpen(true))}
+              aria-label="장소 등록"
+              className="size-11 rounded-full shadow-lg"
+            >
+              <MapPinPlusIcon className="size-5" />
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => gated("list", () => setListOpen((open) => !open))}
+              aria-label="장소 목록"
+              aria-pressed={listOpen}
+              className="size-11 rounded-full shadow-lg"
+            >
+              <ListIcon className="size-5" />
+            </Button>
+
+            {isAuthenticated ? (
+              <Button
+                variant="outline"
+                onClick={() => setSignOutOpen(true)}
+                aria-label="로그아웃"
+                className="size-11 rounded-full shadow-lg"
+              >
+                <LogOutIcon className="size-5" />
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setLoginReason(null)
+                  setLoginOpen(true)
+                }}
+                aria-label="로그인"
+                className="size-11 rounded-full shadow-lg"
+              >
+                <LogInIcon className="size-5" />
+              </Button>
+            )}
+          </>
         )}
       </div>
+
+      {share && (
+        <div className="bg-background/90 absolute top-4 left-4 z-10 rounded-lg px-3 py-2 shadow-lg backdrop-blur">
+          <p className="font-heading text-sm font-medium">
+            {share.categoryName}
+          </p>
+          <p className="text-muted-foreground text-xs tabular-nums">
+            공유된 장소 {shownPlaces.length}곳
+          </p>
+        </div>
+      )}
 
       <PlaceListPanel
         ref={panelRef}
@@ -512,59 +576,64 @@ export function PlaceExplorer({
         onScopeChange={setListScope}
         selectedId={selected?.id ?? null}
         onSelect={onSelectFromList}
-        onEdit={setEditing}
-        onDelete={setDeleting}
+        onEdit={isShare ? undefined : setEditing}
+        onDelete={isShare ? undefined : setDeleting}
+        readOnly={isShare}
         onClose={() => setListOpen(false)}
       />
 
-      <CreatePlaceDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={onCreated}
-        categories={categories}
-        onCategoriesChange={onCategoriesChange}
-      />
+      {!isShare && (
+        <>
+          <CreatePlaceDialog
+            open={createOpen}
+            onOpenChange={setCreateOpen}
+            onCreated={onCreated}
+            categories={categories}
+            onCategoriesChange={onCategoriesChange}
+          />
 
-      <LoginDialog
-        open={loginOpen}
-        onOpenChange={setLoginOpen}
-        reason={loginReason}
-      />
+          <LoginDialog
+            open={loginOpen}
+            onOpenChange={setLoginOpen}
+            reason={loginReason}
+          />
 
-      <SignOutDialog
-        open={signOutOpen}
-        // 로그아웃 진행 중에는 바깥 클릭·Esc 로 닫히지 않게 한다. 닫혀도
-        // 액션은 계속 진행되므로 "취소한 것처럼 보이는데 로그아웃되는" 상태가
-        // 생긴다.
-        onOpenChange={(next) => {
-          if (!signingOut) setSignOutOpen(next)
-        }}
-        onConfirm={onSignOutConfirmed}
-        pending={signingOut}
-      />
+          <SignOutDialog
+            open={signOutOpen}
+            // 로그아웃 진행 중에는 바깥 클릭·Esc 로 닫히지 않게 한다. 닫혀도
+            // 액션은 계속 진행되므로 "취소한 것처럼 보이는데 로그아웃되는" 상태가
+            // 생긴다.
+            onOpenChange={(next) => {
+              if (!signingOut) setSignOutOpen(next)
+            }}
+            onConfirm={onSignOutConfirmed}
+            pending={signingOut}
+          />
 
-      <EditPlaceDialog
-        place={editing}
-        onOpenChange={(next) => {
-          if (!next) setEditing(null)
-        }}
-        onUpdated={onUpdated}
-        categories={categories}
-        onCategoriesChange={onCategoriesChange}
-      />
+          <EditPlaceDialog
+            place={editing}
+            onOpenChange={(next) => {
+              if (!next) setEditing(null)
+            }}
+            onUpdated={onUpdated}
+            categories={categories}
+            onCategoriesChange={onCategoriesChange}
+          />
 
-      <DeletePlaceDialog
-        open={deleting !== null}
-        title={deleting?.title ?? ""}
-        // 삭제가 진행 중일 때는 바깥 클릭·Esc 로 닫히지 않게 한다. 닫혀도
-        // 액션은 계속 진행되므로 "취소한 것처럼 보이는데 지워지는" 상태가
-        // 생긴다. 로그아웃 모달과 같은 처리다.
-        onOpenChange={(next) => {
-          if (!deletePending && !next) setDeleting(null)
-        }}
-        onConfirm={onDeleteConfirmed}
-        pending={deletePending}
-      />
+          <DeletePlaceDialog
+            open={deleting !== null}
+            title={deleting?.title ?? ""}
+            // 삭제가 진행 중일 때는 바깥 클릭·Esc 로 닫히지 않게 한다. 닫혀도
+            // 액션은 계속 진행되므로 "취소한 것처럼 보이는데 지워지는" 상태가
+            // 생긴다. 로그아웃 모달과 같은 처리다.
+            onOpenChange={(next) => {
+              if (!deletePending && !next) setDeleting(null)
+            }}
+            onConfirm={onDeleteConfirmed}
+            pending={deletePending}
+          />
+        </>
+      )}
     </div>
   )
 }
