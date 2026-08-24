@@ -21,7 +21,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { PlaceFields } from "@/components/place-fields"
 import { createPlaceAction, createUploadUrlAction } from "@/actions/place"
-import type { CategorySummary } from "@/lib/categories"
+import type { CategoryWithShare } from "@/lib/categories"
 import {
   ACCEPTED_IMAGE_TYPES,
   MAX_UPLOAD_BYTES,
@@ -69,8 +69,8 @@ export function PlaceForm({
   onCategoriesChange,
 }: {
   onCreated: (place: { latitude: number; longitude: number }) => void
-  categories: CategorySummary[]
-  onCategoriesChange: (categories: CategorySummary[]) => void
+  categories: CategoryWithShare[]
+  onCategoriesChange: (categories: CategoryWithShare[]) => void
 }) {
   const lottieRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapRef>(null)

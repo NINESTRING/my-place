@@ -2,7 +2,7 @@
 
 import { XIcon } from "lucide-react"
 import { PlaceForm } from "@/components/place-form"
-import type { CategorySummary } from "@/lib/categories"
+import type { CategoryWithShare } from "@/lib/categories"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -32,8 +32,8 @@ export function CreatePlaceDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated: (place: { latitude: number; longitude: number }) => void
-  categories: CategorySummary[]
-  onCategoriesChange: (categories: CategorySummary[]) => void
+  categories: CategoryWithShare[]
+  onCategoriesChange: (categories: CategoryWithShare[]) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

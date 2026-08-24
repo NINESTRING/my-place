@@ -5,7 +5,7 @@ import { CategoryPicker } from "@/components/category-picker"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import type { CategorySummary } from "@/lib/categories"
+import type { CategoryWithShare } from "@/lib/categories"
 import type { PlaceFormValues } from "@/schemas/place"
 
 /**
@@ -26,9 +26,9 @@ export function PlaceFields({
   control: Control<PlaceFormValues>
   errors: FieldErrors<PlaceFormValues>
   /** 고를 수 있는 내 카테고리 전부. PlaceExplorer 가 들고 내려보낸다. */
-  categories: CategorySummary[]
+  categories: CategoryWithShare[]
   /** 폼 안에서 카테고리를 만들거나 고치거나 지운 뒤의 다음 목록. */
-  onCategoriesChange: (categories: CategorySummary[]) => void
+  onCategoriesChange: (categories: CategoryWithShare[]) => void
 }) {
   return (
     <>

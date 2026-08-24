@@ -39,7 +39,7 @@ import { SignOutDialog } from "@/components/sign-out-dialog"
 import { Button } from "@/components/ui/button"
 import { useLastData } from "@/hooks/use-last-data"
 import { useLocalState } from "@/hooks/use-local-state"
-import { sortCategories, type CategorySummary } from "@/lib/categories"
+import { sortCategories, type CategoryWithShare } from "@/lib/categories"
 import { publicImageUrl } from "@/lib/images"
 import {
   revivePlace,
@@ -110,7 +110,7 @@ export function PlaceExplorer({
   /** 가장 최근에 다녀온 장소. 첫 화면을 여기로 띄운다. 없으면 null. */
   initialCenter: Coordinates | null
   /** 내가 만든 카테고리 전부. 등록·수정 폼의 선택지가 된다. */
-  initialCategories: CategorySummary[]
+  initialCategories: CategoryWithShare[]
   isAuthenticated: boolean
 }) {
   const mapRef = useRef<MapRef>(null)
@@ -287,7 +287,7 @@ export function PlaceExplorer({
    * 아니라 /api/places 로 오므로 재조회가 필요하다. 생성은 장소를 건드리지
    * 않아 재조회가 남지만, 갈라서 얻는 것에 비해 GET 한 번이 싸다.
    */
-  const onCategoriesChange = (next: CategorySummary[]) => {
+  const onCategoriesChange = (next: CategoryWithShare[]) => {
     setCategories(next)
     setReloadToken((n) => n + 1)
   }

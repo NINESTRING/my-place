@@ -12,7 +12,7 @@ import {
   withCategory,
   withoutCategory,
   withUpdatedCategory,
-  type CategorySummary,
+  type CategoryWithShare,
 } from "@/lib/categories"
 
 /**
@@ -33,8 +33,8 @@ export function CategoryPicker({
   value: number[]
   onChange: (value: number[]) => void
   /** 고를 수 있는 내 카테고리 전부. 부모(PlaceExplorer)가 들고 있다. */
-  categories: CategorySummary[]
-  onCategoriesChange: (categories: CategorySummary[]) => void
+  categories: CategoryWithShare[]
+  onCategoriesChange: (categories: CategoryWithShare[]) => void
   /** 그룹을 이름 붙이는 FieldLabel 의 id. aria-labelledby 로 연결한다. */
   labelId?: string
 }) {
@@ -59,7 +59,18 @@ export function CategoryPicker({
       // 같은 이름을 다시 만들면 서버가 기존 행을 돌려준다(멱등). 어느 쪽이든
       // 목록에 넣고 곧바로 선택 상태로 만든다 — 만든 카테고리를 목록에서
       // 다시 찾아 누르게 하지 않는다.
-      onCategoriesChange(withCategory(categories, result.category))
+      //
+      // 서버 액션은 id·name 만 돌려준다. 방금 만든(또는 이미 있던 같은 이름의)
+      // 카테고리에 공유 상태가 이미 있을 수 있지만, 멱등 생성이 기존 행을
+      // 돌려준 경우 그 행은 이미 목록에 있어 withCategory 가 버린다 — 새로
+      // 들어가는 것은 항상 방금 만든 비공유 행뿐이다.
+      onCategoriesChange(
+        withCategory(categories, {
+          ...result.category,
+          shareEnabled: false,
+          shareToken: null,
+        })
+      )
       if (!value.includes(result.category.id)) {
         onChange([...value, result.category.id])
       }
@@ -89,6 +100,9 @@ export function CategoryPicker({
         <CategoryManager
           categories={categories}
           onRenamed={(category) =>
+            onCategoriesChange(withUpdatedCategory(categories, category))
+          }
+          onShareChanged={(category) =>
             onCategoriesChange(withUpdatedCategory(categories, category))
           }
           onDeleted={onDeleted}

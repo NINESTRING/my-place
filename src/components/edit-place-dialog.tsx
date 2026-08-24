@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import type { CategorySummary } from "@/lib/categories"
+import type { CategoryWithShare } from "@/lib/categories"
 import type { PlaceWithCategories } from "@/lib/places"
 import { placeFormSchema, type PlaceFormValues } from "@/schemas/place"
 
@@ -43,8 +43,8 @@ export function EditPlaceDialog({
   place: PlaceWithCategories | null
   onOpenChange: (open: boolean) => void
   onUpdated: (id: number, values: PlaceFormValues) => void
-  categories: CategorySummary[]
-  onCategoriesChange: (categories: CategorySummary[]) => void
+  categories: CategoryWithShare[]
+  onCategoriesChange: (categories: CategoryWithShare[]) => void
 }) {
   const [saving, setSaving] = useState(false)
 
