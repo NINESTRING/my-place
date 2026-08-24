@@ -64,6 +64,7 @@ export function PlaceListPanel({
   onEdit,
   onDelete,
   onClose,
+  readOnly = false,
 }: {
   ref?: React.Ref<HTMLElement>
   open: boolean
@@ -74,9 +75,15 @@ export function PlaceListPanel({
   onScopeChange: (scope: PlaceListScope) => void
   selectedId: number | null
   onSelect: (place: PlaceWithCategories) => void
-  onEdit: (place: PlaceWithCategories) => void
-  onDelete: (place: PlaceWithCategories) => void
+  onEdit?: (place: PlaceWithCategories) => void
+  onDelete?: (place: PlaceWithCategories) => void
   onClose: () => void
+  /**
+   * 공유 화면용. 범위 토글과 필터 영역을 숨기고 빈 문구를 방문자 시점으로
+   * 바꾼다. 수정·삭제 메뉴는 이 플래그가 아니라 핸들러 유무를 따른다 —
+   * 읽기 전용 화면은 애초에 핸들러를 넘기지 않는다.
+   */
+  readOnly?: boolean
 }) {
   // 카테고리 필터. 빈 선택 = 전체. 로컬 state 인 것이 의도적이다 — 이 선택은
   // 이 패널 밖 어디에도 영향을 주지 않는다(지도 마커는 그대로다).
@@ -122,46 +129,48 @@ export function PlaceListPanel({
         </Button>
       </header>
 
-      <div className="shrink-0 space-y-2 border-b px-4 py-2">
-        <ToggleGroup
-          aria-label="목록 범위"
-          variant="outline"
-          size="sm"
-          spacing={0}
-          value={[scope]}
-          // 눌린 항목을 다시 누르면 base-ui 가 빈 배열을 준다. 세그먼트
-          // 컨트롤에서 "아무것도 선택되지 않음"은 보여 줄 목록이 없다는
-          // 뜻이므로, 값이 비면 지금 범위를 그대로 둔다.
-          onValueChange={([value]) => {
-            if (isScope(value)) onScopeChange(value)
-          }}
-        >
-          {(Object.keys(SCOPE_LABEL) as PlaceListScope[]).map((value) => (
-            <ToggleGroupItem key={value} value={value}>
-              {SCOPE_LABEL[value]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-
-        {categories.length > 0 && (
+      {!readOnly && (
+        <div className="shrink-0 space-y-2 border-b px-4 py-2">
           <ToggleGroup
-            multiple
-            aria-label="카테고리 필터"
+            aria-label="목록 범위"
             variant="outline"
             size="sm"
-            value={activeFilterIds.map(String)}
-            onValueChange={(next) => setFilterIds(toCategoryIds(next))}
-            // 범위 토글과 달리 여기서는 빈 선택이 정당하다 — 필터 없음이다.
-            className="max-w-full flex-wrap justify-start"
+            spacing={0}
+            value={[scope]}
+            // 눌린 항목을 다시 누르면 base-ui 가 빈 배열을 준다. 세그먼트
+            // 컨트롤에서 "아무것도 선택되지 않음"은 보여 줄 목록이 없다는
+            // 뜻이므로, 값이 비면 지금 범위를 그대로 둔다.
+            onValueChange={([value]) => {
+              if (isScope(value)) onScopeChange(value)
+            }}
           >
-            {categories.map((category) => (
-              <ToggleGroupItem key={category.id} value={String(category.id)}>
-                {category.name}
+            {(Object.keys(SCOPE_LABEL) as PlaceListScope[]).map((value) => (
+              <ToggleGroupItem key={value} value={value}>
+                {SCOPE_LABEL[value]}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-        )}
-      </div>
+
+          {categories.length > 0 && (
+            <ToggleGroup
+              multiple
+              aria-label="카테고리 필터"
+              variant="outline"
+              size="sm"
+              value={activeFilterIds.map(String)}
+              onValueChange={(next) => setFilterIds(toCategoryIds(next))}
+              // 범위 토글과 달리 여기서는 빈 선택이 정당하다 — 필터 없음이다.
+              className="max-w-full flex-wrap justify-start"
+            >
+              {categories.map((category) => (
+                <ToggleGroupItem key={category.id} value={String(category.id)}>
+                  {category.name}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          )}
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
         {shownPlaces === null ? (
@@ -173,9 +182,11 @@ export function PlaceListPanel({
             {/* 범위에는 장소가 있는데 필터가 다 걸러낸 경우를 갈라 준다 —
                 범위별 빈 문구("등록한 장소가 없습니다")를 그대로 쓰면
                 거짓말이 된다. */}
-            {activeFilterIds.length > 0 && places && places.length > 0
-              ? "고른 카테고리의 장소가 없습니다. 필터를 바꾸거나 해제해 보세요."
-              : EMPTY_MESSAGE[scope]}
+            {readOnly
+              ? "이 카테고리에는 아직 장소가 없습니다."
+              : activeFilterIds.length > 0 && places && places.length > 0
+                ? "고른 카테고리의 장소가 없습니다. 필터를 바꾸거나 해제해 보세요."
+                : EMPTY_MESSAGE[scope]}
           </p>
         ) : (
           <ul className="space-y-3">
@@ -199,13 +210,15 @@ export function PlaceListPanel({
                     폰에서는 카드가 가로로 눕고 오른쪽 위가 날짜 줄이므로,
                     사진 위(왼쪽 위)로 옮긴다. 좁은 화면에서 글자와 자리를
                     다투지 않게 하려는 것이다. */}
-                <div className="absolute top-2 left-2 sm:right-2 sm:left-auto">
-                  <PlaceCardMenu
-                    title={place.title}
-                    onEdit={() => onEdit(place)}
-                    onDelete={() => onDelete(place)}
-                  />
-                </div>
+                {onEdit && onDelete && (
+                  <div className="absolute top-2 left-2 sm:right-2 sm:left-auto">
+                    <PlaceCardMenu
+                      title={place.title}
+                      onEdit={() => onEdit(place)}
+                      onDelete={() => onDelete(place)}
+                    />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
