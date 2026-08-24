@@ -6,7 +6,7 @@ import {
   toCategoryIds,
   withCategory,
   withoutCategory,
-  withRenamedCategory,
+  withUpdatedCategory,
 } from "@/lib/categories"
 
 describe("sortCategories", () => {
@@ -61,16 +61,49 @@ describe("withCategory", () => {
   })
 })
 
-describe("withRenamedCategory", () => {
-  it("같은 id 의 이름을 바꾸고 정렬 위치를 다시 잡는다", () => {
+describe("withUpdatedCategory", () => {
+  it("같은 id 의 이름을 겹쳐 쓰고 다시 정렬한다", () => {
     const list = [
       { id: 1, name: "명소" },
       { id: 2, name: "카페" },
     ]
-    expect(withRenamedCategory(list, { id: 1, name: "휴양지" })).toEqual([
+    expect(withUpdatedCategory(list, { id: 1, name: "휴양지" })).toEqual([
       { id: 2, name: "카페" },
       { id: 1, name: "휴양지" },
     ])
+  })
+
+  it("교체가 아니라 병합이다 — 서버가 안 돌려준 필드(공유 상태)가 남는다", () => {
+    const list = [
+      { id: 1, name: "명소", shareEnabled: true, shareToken: "tok" },
+      { id: 2, name: "카페", shareEnabled: false, shareToken: null },
+    ]
+    const next = withUpdatedCategory(list, { id: 1, name: "휴양지" })
+    expect(next.find((c) => c.id === 1)).toEqual({
+      id: 1,
+      name: "휴양지",
+      shareEnabled: true,
+      shareToken: "tok",
+    })
+  })
+
+  it("공유 상태 변경도 같은 헬퍼로 겹쳐 쓴다", () => {
+    const list = [
+      { id: 1, name: "명소", shareEnabled: false, shareToken: null },
+    ]
+    const updated = {
+      id: 1,
+      name: "명소",
+      shareEnabled: true,
+      shareToken: "tok",
+    }
+    const next = withUpdatedCategory(list, updated)
+    expect(next[0]).toEqual({
+      id: 1,
+      name: "명소",
+      shareEnabled: true,
+      shareToken: "tok",
+    })
   })
 })
 

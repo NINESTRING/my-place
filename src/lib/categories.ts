@@ -6,6 +6,18 @@
 export type CategorySummary = { id: number; name: string }
 
 /**
+ * 관리 경로(폼 선택지·CategoryManager)가 쓰는 내 카테고리 — 공유 상태까지
+ * 든다. 장소 카드의 categories(PlaceWithCategories)는 여전히 CategorySummary
+ * 다: 장소 조회마다 토큰을 끌고 다닐 이유가 없고, /api/places 응답에 토큰이
+ * 실려 나가지 않게 하는 경계이기도 하다. 이 타입은 본인 세션의 getCategories
+ * 로만 내려온다.
+ */
+export type CategoryWithShare = CategorySummary & {
+  shareEnabled: boolean
+  shareToken: string | null
+}
+
+/**
  * 화면에 보이는 카테고리 순서는 어디서나 이름순 하나다. 서버 조회, 클라이언트
  * 목록 append 후, 카드 라벨이 각자 정렬하면 결국 서로 어긋난다.
  */
@@ -31,21 +43,26 @@ export function toCategoryIds(next: readonly string[]): number[] {
  * 경우) 그대로 둔다. 아래 두 헬퍼와 함께, 서버 액션 성공 후 클라이언트가
  * 들고 있는 선택지 목록을 재조회 없이 같은 상태로 옮기는 데 쓴다.
  */
-export function withCategory(
-  categories: readonly CategorySummary[],
-  category: CategorySummary
-): CategorySummary[] {
+export function withCategory<T extends CategorySummary>(
+  categories: readonly T[],
+  category: T
+): T[] {
   if (categories.some((c) => c.id === category.id)) return [...categories]
   return sortCategories([...categories, category])
 }
 
-/** 같은 id 의 이름을 바꾼다. 이름이 바뀌면 정렬 위치도 다시 잡는다. */
-export function withRenamedCategory(
-  categories: readonly CategorySummary[],
+/**
+ * 같은 id 행에 서버가 돌려준 필드를 겹쳐 쓴다 — 이름 변경과 공유 상태 변경이
+ * 함께 쓴다. 통째 교체가 아니라 병합인 이유: 이름 변경 액션은 공유 필드를
+ * 돌려주지 않으므로, 교체하면 클라이언트가 들고 있던 공유 상태가 사라진다.
+ * 이름이 바뀌면 정렬 위치도 다시 잡는다.
+ */
+export function withUpdatedCategory<T extends CategorySummary>(
+  categories: readonly T[],
   category: CategorySummary
-): CategorySummary[] {
+): T[] {
   return sortCategories(
-    categories.map((c) => (c.id === category.id ? category : c))
+    categories.map((c) => (c.id === category.id ? { ...c, ...category } : c))
   )
 }
 
@@ -66,10 +83,10 @@ export function filterByCategories<
 }
 
 /** 목록에서 뺀다. 폼 값(categoryIds)에서 빼는 것은 호출자의 몫이다. */
-export function withoutCategory(
-  categories: readonly CategorySummary[],
+export function withoutCategory<T extends CategorySummary>(
+  categories: readonly T[],
   id: number
-): CategorySummary[] {
+): T[] {
   return categories.filter((c) => c.id !== id)
 }
 

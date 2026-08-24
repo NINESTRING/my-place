@@ -11,7 +11,7 @@ import {
   toCategoryIds,
   withCategory,
   withoutCategory,
-  withRenamedCategory,
+  withUpdatedCategory,
   type CategorySummary,
 } from "@/lib/categories"
 
@@ -89,7 +89,7 @@ export function CategoryPicker({
         <CategoryManager
           categories={categories}
           onRenamed={(category) =>
-            onCategoriesChange(withRenamedCategory(categories, category))
+            onCategoriesChange(withUpdatedCategory(categories, category))
           }
           onDeleted={onDeleted}
         />
