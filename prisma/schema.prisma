@@ -34,6 +34,11 @@ model Category {
   userId    String          @map(name: "user_id")
   name      String
   createdAt DateTime        @default(now()) @map(name: "created_at")
+  // 공유 링크 토큰. 처음 공유를 켤 때 한 번 만들어 영구 보관한다 — 껐다 켜도
+  // 같은 링크가 살아나야 하므로(설계 결정) 끌 때 지우지 않는다. 링크의 유효
+  // 여부는 shareEnabled 하나로 판단한다.
+  shareToken   String?  @unique @map(name: "share_token")
+  shareEnabled Boolean  @default(false) @map(name: "share_enabled")
   places    PlaceCategory[]
 
   @@unique([userId, name])
