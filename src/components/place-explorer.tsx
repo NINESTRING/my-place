@@ -175,22 +175,31 @@ export function PlaceExplorer({
   )
   const shownPlaces = useLastData(places) ?? []
 
-  // 목록 패널의 기본 범위인 "내가 등록한 모든 장소". 마커용 bounds 조회와
-  // 달리 지도를 움직여도 다시 부르지 않으므로 따로 들고 있는다. null 은 아직
-  // 못 불러왔다는 뜻이고, 패널이 그 상태를 "장소 없음"과 갈라 보여 준다.
+  // "내가 등록한 모든 장소". bounds 조회와 달리 지도를 움직여도 다시 부르지
+  // 않으므로 따로 들고 있는다. null 은 아직 못 불러왔다는 뜻이고, 목록 패널이
+  // 그 상태를 "장소 없음"과 갈라 보여 준다.
   const [allPlaces, setAllPlaces] = useState<PlaceWithCategories[] | null>(
     isShare ? initialPlaces : null
   )
   const everyPlace = useLastData(allPlaces)
+
+  // 마커는 보이는 영역이 아니라 전체 목록으로 그린다. 영역 조회는 moveend
+  // 뒤 디바운스와 네트워크를 기다리므로, 지도를 넓히면 새로 드러난 영역의
+  // 마커가 한 박자 늦게 떴다. 개인이 등록하는 규모(많아야 수백 건,
+  // getAllPlaces 참고)는 전부 미리 그려 두어도 부담이 없다. 전체 목록이
+  // 아직 없는 첫 로딩 동안만 서버가 초기 영역으로 내려준 목록을 쓴다.
+  const markerPlaces = everyPlace ?? shownPlaces
 
   // 저장 직후처럼 bounds 는 그대로인데 서버 데이터만 바뀐 경우를 위한 값이다.
   // 이 화면의 장소 목록은 RSC 가 아니라 /api/places 로 가져오므로
   // router.refresh() 로는 갱신되지 않는다.
   const [reloadToken, setReloadToken] = useState(0)
 
+  // 보이는 영역 안의 장소. 마커는 전체 목록(markerPlaces)으로 그리므로 이
+  // 조회는 목록 패널의 "지도 범위" 화면만 먹여 살린다.
   useEffect(() => {
     // 공유 화면은 서버가 내려준 장소가 전부다. /api/places 는 세션 스코프라
-    // 방문자에게 어차피 빈 배열을 줄 뿐이고, 마커가 지워지기만 한다.
+    // 방문자에게 어차피 빈 배열을 줄 뿐이고, 목록이 지워지기만 한다.
     if (isShare) return
 
     const controller = new AbortController()
@@ -443,7 +452,7 @@ export function PlaceExplorer({
           mapStyle="https://tiles.openfreemap.org/styles/liberty"
           style={{ width: "100%", height: "100%" }}
         >
-          {shownPlaces.map((place) => (
+          {markerPlaces.map((place) => (
             <Marker
               key={place.id}
               latitude={place.latitude}
