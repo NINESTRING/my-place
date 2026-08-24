@@ -3,6 +3,9 @@ import "server-only"
 import type { PlaceWithCategories } from "@/lib/places"
 import { prisma } from "@/lib/prisma"
 
+// 공유 응답에서 등록·수정 시각을 지울 때 쓰는 중립값. 타입은 Date 여야 한다.
+const EPOCH = new Date(0)
+
 /**
  * 공유 토큰으로 카테고리와 그 장소 전체를 조회한다. 미인증 열람의 유일한
  * 입구이므로 스코프(토큰)가 필수 인자인 것은 places.server.ts 와 같은
@@ -31,10 +34,21 @@ export async function getSharedPlaces(
 
   return {
     name: category.name,
+    // 화면이 쓰지 않는 소유자·이력 필드는 중립값으로 지운다. RSC 페이로드는
+    // 화면에 렌더되지 않아도 방문자에게 그대로 내려가므로, 공개 범위(제목·
+    // 설명·사진·좌표·촬영일)를 넘는 값을 여기서 끊는다. 사진 경로에 든
+    // userId 는 공개 버킷 구조상 이미 보이는 값이라 대상이 아니다.
+    //
     // categories 를 일부러 비워 보낸다. 공유된 장소가 공유되지 않은 다른
     // 카테고리("데이트 코스" 같은)도 달고 있을 수 있고, 그 이름이 방문자에게
     // 새면 안 된다. 화면 쪽에서도 전부 같은 카테고리라 라벨의 정보 가치가
     // 없다.
-    places: rows.map((place) => ({ ...place, categories: [] })),
+    places: rows.map((place) => ({
+      ...place,
+      userId: "",
+      createdAt: EPOCH,
+      updatedAt: EPOCH,
+      categories: [],
+    })),
   }
 }
