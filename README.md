@@ -10,8 +10,9 @@
 
 ## 주요 기능
 
-화면은 `/` 한 페이지뿐입니다. MapLibre 지도가 뷰포트를 가득 채우고, 지도를
-떠나지 않은 채로 로그인·등록·목록을 전부 오버레이로 처리합니다.
+사용자 화면은 `/` 한 페이지이고, 공유 링크용 읽기 전용 화면 `/share/[token]`이
+있습니다. `/`는 MapLibre 지도가 뷰포트를 가득 채우고, 지도를 떠나지 않은 채로
+로그인·등록·목록을 전부 오버레이로 처리합니다.
 
 | 요소 | 조작 | 설명 |
 | --- | --- | --- |
@@ -49,6 +50,18 @@
   5지선다(카페·식당·숙소·명소·풍경)는
   `supabase/migrations/20260824000000_user_categories.sql` 이 같은 이름의
   사용자 카테고리로 이행합니다.
+
+  카테고리마다 공유를 켜고 끌 수도 있습니다. 등록·수정 폼의 카테고리 칸
+  `관리` 화면에서 행마다 있는 공유 아이콘(`Share2`)을 누르면 켜지고, 켜진
+  행에는 링크 복사 아이콘(`Link`)이 나타납니다. 공유 링크(`/share/<토큰>`)는
+  로그인 없이 열리는 읽기 전용 지도 화면으로, 그 카테고리의 장소 전체를 한
+  번에 보여줄 뿐 재조회·등록·수정·삭제·로그인 UI는 없습니다. 토큰은 처음
+  공유를 켤 때 만들어 영구 보관하므로 껐다 켜도 링크 주소는 그대로입니다.
+  공유가 꺼졌거나 카테고리가 삭제된 링크는 없는 링크와 같은 404 화면으로
+  갑니다(카테고리를 지울 때도 공유 중이면 링크가 함께 닫힌다고 확인
+  문구에 안내합니다). 공유 화면에는 그 카테고리 이름과 장소 개수만 보이고,
+  장소가 걸어 둔 다른(공유하지 않은) 카테고리 이름은 방문자에게 내려가지
+  않습니다.
 - **수정·삭제** — 목록 카드의 `⋮` 메뉴에서 제목·설명·카테고리를 고치거나 장소를 지웁니다. 사진과 촬영 위치는 EXIF에서 온 값이라 수정 대상이 아니며, 삭제하면 Storage의 사진도 함께 지워집니다.
 - **폰 화면 대응** — 좁은 화면(`sm` 미만)에서는 목록 카드가 96px 썸네일을 앞세운 가로 배치로 눕고(한 화면에 여섯 곳 남짓), 마커 팝업 내용 폭이 176px로, 목록 패널 폭이 `70vw`로 줄어듭니다. 데스크톱 배치는 그대로입니다.
 - **토스트 안내** — 삭제 성공, 로그인 시작 실패, OAuth 콜백 실패 등은 sonner 토스트로 알립니다. 콜백 실패는 `/?auth_error=1`로 돌아오며, 토스트를 띄운 뒤 `replaceState`로 주소창을 정리합니다.
@@ -74,7 +87,7 @@
   아래 알려진 이슈 참고)
 - **이미지**: Supabase Storage (public 버킷) + next/image 내장 최적화
 - **알림**: sonner (`next-themes`는 shadcn이 생성한 sonner 래퍼가 테마를 읽는 용도로만 들어 있습니다)
-- **테스트**: Vitest (단위 테스트 94개 / 5파일)
+- **테스트**: Vitest (단위 테스트 128개 / 7파일)
 - **호스팅**: Vercel
 - **기타**: react-hook-form, exifr, lottie-web, use-debounce
 
@@ -153,7 +166,7 @@ Route Handler(GET)를 쓰는데, 서버 액션은 POST 전용이고 순차 실�
 ### 데이터 모델
 
 - `places` (Prisma `Place`) — `userId`(Supabase auth 사용자 UUID, 인덱스), `image`, `imageCreationTime`, `latitude`, `longitude`, `title`, `description`(nullable), `createdAt`, `updatedAt`.
-- `categories` (Prisma `Category`) — `userId`, `name`, `createdAt`. 이름은 같은 사용자 안에서 유일(`@@unique([userId, name])`).
+- `categories` (Prisma `Category`) — `userId`, `name`, `createdAt`, `shareToken`(nullable·unique, 첫 공유 시 `crypto.randomBytes(16)`으로 만든 base64url 22자를 영구 보관), `shareEnabled`(기본 false). 이름은 같은 사용자 안에서 유일(`@@unique([userId, name])`).
 - `place_categories` (Prisma `PlaceCategory`) — 장소-카테고리 다대다 조인. 양쪽 모두 `onDelete: Cascade` 라 장소를 지우면 조인만 사라지고 카테고리는 남는다. 암시적 m-n 대신 명시적 모델을 쓰는 이유는 테이블·컬럼 이름을 우리가 정해야 이행 SQL 과 RLS 구문이 Prisma 관례(`_CategoryToPlace`, `A`/`B`)에 묶이지 않기 때문.
 
 제출된 카테고리 id 가 세션 사용자의 것인지는 서버 액션이 `ownsAllCategories` 로 대조한다 — 형식 검증(Zod)만으로는 남의 카테고리 id 를 막을 수 없다.
@@ -164,7 +177,9 @@ Route Handler(GET)를 쓰는데, 서버 액션은 POST 전용이고 순차 실�
 app/
   layout.tsx           루트 레이아웃 (전역 헤더 없음 — 지도가 화면을 채운다, Toaster 포함)
   globals.css          Tailwind 4 + shadcn 테마
-  page.tsx             유일한 화면 (force-dynamic)
+  page.tsx             메인 화면 (force-dynamic)
+  share/[token]/page.tsx  공유 링크로 여는 읽기 전용 지도 (force-dynamic,
+                       noindex — 없거나 꺼진 토큰은 404)
   api/places/route.ts  bounds 기반 / scope=all 장소 조회 (미인증이면 빈 배열)
   auth/callback/route.ts  OAuth code → 세션 쿠키 교환
   error.tsx  loading.tsx  not-found.tsx
@@ -172,10 +187,13 @@ proxy.ts               Next 16 미들웨어 — Supabase 세션 토큰 갱신 �
 src/
   actions/     서버 액션 (createPlaceAction, updatePlaceAction, deletePlaceAction,
                createUploadUrlAction, createCategoryAction,
-               updateCategoryAction, deleteCategoryAction, signOutAction)
+               updateCategoryAction, deleteCategoryAction,
+               setCategorySharingAction, signOutAction)
   schemas/     Zod 스키마 (폼·서버 액션 공용)
   lib/         prisma, places(순수 헬퍼), places.server(DB 조회), images,
-               supabase/{server,browser,admin}, auth, categories, utils(cn)
+               supabase/{server,browser,admin}, auth, categories,
+               share-token(토큰 생성), share.server(공유 토큰으로 카테고리·
+               장소 조회), utils(cn)
   components/  PlaceExplorer(화면 전체), PlaceListPanel, PlaceCard, PlaceCardMenu,
                CreatePlaceDialog, EditPlaceDialog, DeletePlaceDialog,
                LoginDialog, SignOutDialog, AuthErrorToast,
@@ -285,6 +303,8 @@ Vercel에 올라가 있습니다 — <https://my-place-eosin.vercel.app/>.
 - `proxy.ts`가 인증 쿠키를 싣는 응답에 라이브러리가 준 캐시 헤더를 그대로
   붙입니다 — CDN이 세션 쿠키가 실린 응답을 캐시하면 남의 세션이 서빙될 수
   있기 때문입니다.
+- 스키마를 고친 뒤에는 배포 DB에도 `npx prisma db push`를 돌려야 합니다 —
+  Vercel 빌드가 스키마를 알아서 반영해 주지 않습니다.
 
 ## 미완성 / 알려진 이슈
 
@@ -293,7 +313,7 @@ Vercel에 올라가 있습니다 — <https://my-place-eosin.vercel.app/>.
 - 목록 패널은 지도를 가리지 않는 것이 목적이라 백드롭도 포커스 트랩도 없는
   일반 `<aside>`입니다. 닫힘 상태에서는 화면 밖으로 밀려나 있을 뿐 DOM에
   남으므로 `inert`로 탭 순서에서 제외합니다. 스와이프로 닫는 제스처는 없습니다.
-- 테스트는 Zod 스키마와 순수 함수에 대한 Vitest 단위 테스트(94개)뿐입니다.
+- 테스트는 Zod 스키마와 순수 함수에 대한 Vitest 단위 테스트(128개)뿐입니다.
   컴포넌트 테스트와 E2E 테스트는 없고, 인증·인가 경로도 수동 확인에
   의존합니다.
 - 로그인 제공자는 Google 하나뿐입니다. 이메일/비밀번호나 다른 소셜 로그인은
