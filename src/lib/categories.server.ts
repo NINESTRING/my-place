@@ -1,6 +1,6 @@
 import "server-only"
 
-import { sortCategories, type CategorySummary } from "@/lib/categories"
+import { sortCategories, type CategoryWithShare } from "@/lib/categories"
 import { prisma } from "@/lib/prisma"
 
 /**
@@ -11,13 +11,11 @@ import { prisma } from "@/lib/prisma"
  */
 export async function getCategories(
   userId: string
-): Promise<CategorySummary[]> {
+): Promise<CategoryWithShare[]> {
   const categories = await prisma.category.findMany({
     where: { userId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, shareEnabled: true, shareToken: true },
   })
-  // DB 정렬 대신 화면과 같은 콜레이터(localeCompare)로 정렬한다. 클라이언트가
-  // 새 카테고리를 append 한 뒤 정렬하는 것과 기준이 다르면 순서가 튄다.
   return sortCategories(categories)
 }
 
