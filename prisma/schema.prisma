@@ -19,7 +19,7 @@ model Place {
   longitude         Float
   title             String
   description       String?
-  category          PlaceCategory?
+  categories        PlaceCategory[]
   createdAt         DateTime @default(now()) @map(name: "created_at")
   updatedAt         DateTime @default(now()) @map(name: "updated_at")
 
@@ -27,10 +27,29 @@ model Place {
   @@map(name: "places")
 }
 
-enum PlaceCategory {
-  CAFE
-  RESTAURANT
-  STAY
-  ATTRACTION
-  SCENERY
+// 사용자가 직접 만드는 카테고리. 이름은 같은 사용자 안에서만 유일하면 된다 —
+// 서로 다른 사용자가 같은 이름을 쓰는 것은 당연히 허용이다.
+model Category {
+  id        Int             @id @default(autoincrement())
+  userId    String          @map(name: "user_id")
+  name      String
+  createdAt DateTime        @default(now()) @map(name: "created_at")
+  places    PlaceCategory[]
+
+  @@unique([userId, name])
+  @@map(name: "categories")
+}
+
+// 장소-카테고리 조인. 암시적 m-n 을 쓰지 않는 이유는 테이블·컬럼 이름을
+// Prisma 관례(_CategoryToPlace, A/B)가 정해 버려서, 손으로 쓰는 이행 SQL 과
+// RLS 구문이 그 관례에 묶이기 때문이다. Cascade 라서 장소를 지우면 조인만
+// 지워지고 카테고리는 남는다 — 다른 장소가 같은 카테고리를 쓰고 있을 수 있다.
+model PlaceCategory {
+  placeId    Int      @map(name: "place_id")
+  categoryId Int      @map(name: "category_id")
+  place      Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([placeId, categoryId])
+  @@map(name: "place_categories")
 }

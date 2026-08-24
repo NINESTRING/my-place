@@ -1,10 +1,34 @@
 import "server-only"
 
 import type { Place } from "@/generated/prisma/client"
+import { sortCategories } from "@/lib/categories"
+import type { PlaceWithCategories } from "@/lib/places"
 import { prisma } from "@/lib/prisma"
 import type { Bounds } from "@/schemas/place"
 
 const MAX_PLACES = 50
+
+/**
+ * 조인 테이블을 화면이 몰라도 되도록 카테고리를 id·name 축약형으로 평탄화해
+ * 돌려준다. 정렬은 어디서나 이름순 하나(sortCategories)다.
+ */
+const withCategories = {
+  categories: {
+    select: { category: { select: { id: true, name: true } } },
+  },
+} as const
+
+type PlaceRow = Place & {
+  categories: { category: { id: number; name: string } }[]
+}
+
+function flattenCategories(row: PlaceRow): PlaceWithCategories {
+  const { categories, ...place } = row
+  return {
+    ...place,
+    categories: sortCategories(categories.map((link) => link.category)),
+  }
+}
 
 /**
  * 지도에 보이는 영역에서 **이 사용자가 등록한** 장소. 마커와 목록 패널이 이
@@ -23,16 +47,18 @@ const MAX_PLACES = 50
 export async function getPlacesInBounds(
   bounds: Bounds,
   userId: string
-): Promise<Place[]> {
-  return prisma.place.findMany({
+): Promise<PlaceWithCategories[]> {
+  const rows = await prisma.place.findMany({
     where: {
       userId,
       latitude: { gte: bounds.sw.latitude, lte: bounds.ne.latitude },
       longitude: { gte: bounds.sw.longitude, lte: bounds.ne.longitude },
     },
+    include: withCategories,
     take: MAX_PLACES,
     orderBy: { imageCreationTime: "desc" },
   })
+  return rows.map(flattenCategories)
 }
 
 /**
@@ -44,15 +70,20 @@ export async function getPlacesInBounds(
  * 상한을 두면 "전체"라고 적힌 목록에서 오래된 장소가 아무 표시 없이 사라진다.
  * 그 규모를 넘어서면 상한이 아니라 페이지네이션으로 풀 일이다.
  */
-export async function getAllPlaces(userId: string): Promise<Place[]> {
-  return prisma.place.findMany({
+export async function getAllPlaces(
+  userId: string
+): Promise<PlaceWithCategories[]> {
+  const rows = await prisma.place.findMany({
     where: { userId },
+    include: withCategories,
     orderBy: { imageCreationTime: "desc" },
   })
+  return rows.map(flattenCategories)
 }
 
 /**
  * 가장 최근에 다녀온 장소 한 건. 첫 화면을 어디로 띄울지 정하는 데 쓴다.
+ * 좌표만 필요하므로 카테고리는 조인하지 않는다.
  *
  * 정렬 기준은 목록과 같은 촬영 시각이다. 등록 시각으로 잡으면 예전 사진을
  * 방금 올렸을 때 목록 맨 위와 지도가 서로 다른 곳을 가리킨다.

@@ -1,16 +1,16 @@
-import type { Place } from "@/generated/prisma/client"
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
-import { categoryLabel } from "@/lib/categories"
+import { categoryNames } from "@/lib/categories"
 import { publicImageUrl } from "@/lib/images"
+import type { PlaceWithCategories } from "@/lib/places"
 
-export function PlaceCard({ place }: { place: Place }) {
+export function PlaceCard({ place }: { place: PlaceWithCategories }) {
   const takenAt = new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
     month: "long",
     day: "numeric",
   }).format(place.imageCreationTime)
-  const category = categoryLabel(place.category)
+  const category = categoryNames(place.categories)
 
   return (
     <Card className="overflow-hidden p-0">
@@ -29,8 +29,10 @@ export function PlaceCard({ place }: { place: Place }) {
         </div>
         <CardContent className="min-w-0 flex-1 space-y-1 p-3 sm:space-y-2 sm:p-4">
           <div className="text-muted-foreground flex items-center justify-between gap-2 text-xs sm:text-sm">
-            <span className="truncate">{takenAt}</span>
-            {category && <span className="shrink-0">{category}</span>}
+            {/* 카테고리가 여러 개면 얼마든지 길어질 수 있다. 날짜를 고정하고
+                카테고리 쪽을 말줄임한다 — 단일 enum 시절과 반대다. */}
+            <span className="shrink-0">{takenAt}</span>
+            {category && <span className="truncate">{category}</span>}
           </div>
           <p className="truncate font-medium sm:whitespace-normal">
             {place.title}

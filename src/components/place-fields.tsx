@@ -5,6 +5,7 @@ import { CategoryPicker } from "@/components/category-picker"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import type { CategorySummary } from "@/lib/categories"
 import type { PlaceFormValues } from "@/schemas/place"
 
 /**
@@ -19,9 +20,15 @@ import type { PlaceFormValues } from "@/schemas/place"
 export function PlaceFields({
   control,
   errors,
+  categories,
+  onCategoriesChange,
 }: {
   control: Control<PlaceFormValues>
   errors: FieldErrors<PlaceFormValues>
+  /** 고를 수 있는 내 카테고리 전부. PlaceExplorer 가 들고 내려보낸다. */
+  categories: CategorySummary[]
+  /** 폼 안에서 카테고리를 만들거나 고치거나 지운 뒤의 다음 목록. */
+  onCategoriesChange: (categories: CategorySummary[]) => void
 }) {
   return (
     <>
@@ -63,16 +70,18 @@ export function PlaceFields({
         </FieldLabel>
         <Controller
           control={control}
-          name="category"
+          name="categoryIds"
           render={({ field }) => (
             <CategoryPicker
               value={field.value}
               onChange={field.onChange}
+              categories={categories}
+              onCategoriesChange={onCategoriesChange}
               labelId="category-label"
             />
           )}
         />
-        <FieldError errors={[errors.category]} />
+        <FieldError errors={[errors.categoryIds]} />
       </Field>
     </>
   )

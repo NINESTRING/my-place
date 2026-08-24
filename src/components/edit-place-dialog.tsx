@@ -1,7 +1,6 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import type { Place } from "@/generated/prisma/client"
 import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
@@ -17,6 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import type { CategorySummary } from "@/lib/categories"
+import type { PlaceWithCategories } from "@/lib/places"
 import { placeFormSchema, type PlaceFormValues } from "@/schemas/place"
 
 /**
@@ -36,10 +37,14 @@ export function EditPlaceDialog({
   place,
   onOpenChange,
   onUpdated,
+  categories,
+  onCategoriesChange,
 }: {
-  place: Place | null
+  place: PlaceWithCategories | null
   onOpenChange: (open: boolean) => void
   onUpdated: (id: number, values: PlaceFormValues) => void
+  categories: CategorySummary[]
+  onCategoriesChange: (categories: CategorySummary[]) => void
 }) {
   const [saving, setSaving] = useState(false)
 
@@ -50,7 +55,7 @@ export function EditPlaceDialog({
     formState: { errors },
   } = useForm<PlaceFormValues>({
     resolver: zodResolver(placeFormSchema),
-    defaultValues: { title: "", description: "", category: null },
+    defaultValues: { title: "", description: "", categoryIds: [] },
   })
 
   useEffect(() => {
@@ -60,7 +65,7 @@ export function EditPlaceDialog({
       // Textarea 는 null 을 받으면 uncontrolled 로 떨어진다. DB 의 null 을
       // 빈 문자열로 펴서 넘긴다 — 스키마가 저장할 때 다시 접는다.
       description: place.description ?? "",
-      category: place.category,
+      categoryIds: place.categories.map((category) => category.id),
     })
   }, [place, reset])
 
@@ -107,7 +112,12 @@ export function EditPlaceDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <PlaceFields control={control} errors={errors} />
+          <PlaceFields
+            control={control}
+            errors={errors}
+            categories={categories}
+            onCategoriesChange={onCategoriesChange}
+          />
 
           <DialogFooter>
             <DialogClose

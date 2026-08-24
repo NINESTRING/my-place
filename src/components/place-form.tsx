@@ -21,6 +21,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { PlaceFields } from "@/components/place-fields"
 import { createPlaceAction, createUploadUrlAction } from "@/actions/place"
+import type { CategorySummary } from "@/lib/categories"
 import {
   ACCEPTED_IMAGE_TYPES,
   MAX_UPLOAD_BYTES,
@@ -64,8 +65,12 @@ async function uploadToStorage(file: File, signedUrl: string): Promise<void> {
  */
 export function PlaceForm({
   onCreated,
+  categories,
+  onCategoriesChange,
 }: {
   onCreated: (place: { latitude: number; longitude: number }) => void
+  categories: CategorySummary[]
+  onCategoriesChange: (categories: CategorySummary[]) => void
 }) {
   const lottieRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapRef>(null)
@@ -82,7 +87,7 @@ export function PlaceForm({
     formState: { errors },
   } = useForm<PlaceFormValues>({
     resolver: zodResolver(placeFormSchema),
-    defaultValues: { title: "", description: "", category: null },
+    defaultValues: { title: "", description: "", categoryIds: [] },
   })
 
   // lottie-web 은 import 시점에 document 에 접근하므로 브라우저에서만 불러온다.
@@ -251,7 +256,7 @@ export function PlaceForm({
         imageCreationTime: exif.createDate,
         latitude: exif.latitude,
         longitude: exif.longitude,
-        category: values.category,
+        categoryIds: values.categoryIds,
       })
 
       if (!result.ok) {
@@ -339,7 +344,12 @@ export function PlaceForm({
         </div>
       )}
 
-      <PlaceFields control={control} errors={errors} />
+      <PlaceFields
+        control={control}
+        errors={errors}
+        categories={categories}
+        onCategoriesChange={onCategoriesChange}
+      />
 
       <Button type="submit" disabled={submitting} className="w-full">
         {submitting ? "저장 중…" : "저장"}

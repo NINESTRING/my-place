@@ -2,6 +2,7 @@
 
 import { XIcon } from "lucide-react"
 import { PlaceForm } from "@/components/place-form"
+import type { CategorySummary } from "@/lib/categories"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -25,10 +26,14 @@ export function CreatePlaceDialog({
   open,
   onOpenChange,
   onCreated,
+  categories,
+  onCategoriesChange,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated: (place: { latitude: number; longitude: number }) => void
+  categories: CategorySummary[]
+  onCategoriesChange: (categories: CategorySummary[]) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -60,7 +65,11 @@ export function CreatePlaceDialog({
         </DialogClose>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <PlaceForm onCreated={onCreated} />
+          <PlaceForm
+            onCreated={onCreated}
+            categories={categories}
+            onCategoriesChange={onCategoriesChange}
+          />
         </div>
       </DialogContent>
     </Dialog>

@@ -1,9 +1,16 @@
 import type { Place } from "@/generated/prisma/client"
+import type { CategorySummary } from "@/lib/categories"
 import type { Bounds, Coordinates } from "@/schemas/place"
 
-/** JSON 전송 후의 Place — Date 필드가 문자열로 바뀐 형태. */
+/**
+ * 화면이 다루는 장소의 기본형. 조회(places.server.ts)가 조인을 평탄화해
+ * 이 모양으로 돌려주므로, 컴포넌트는 조인 테이블의 존재를 모른다.
+ */
+export type PlaceWithCategories = Place & { categories: CategorySummary[] }
+
+/** JSON 전송 후의 장소 — Date 필드가 문자열로 바뀐 형태. */
 export type SerializedPlace = Omit<
-  Place,
+  PlaceWithCategories,
   "imageCreationTime" | "createdAt" | "updatedAt"
 > & {
   imageCreationTime: string
@@ -11,8 +18,8 @@ export type SerializedPlace = Omit<
   updatedAt: string
 }
 
-/** SerializedPlace 를 다시 Place 로 되돌린다. */
-export function revivePlace(place: SerializedPlace): Place {
+/** SerializedPlace 를 다시 PlaceWithCategories 로 되돌린다. */
+export function revivePlace(place: SerializedPlace): PlaceWithCategories {
   return {
     ...place,
     imageCreationTime: new Date(place.imageCreationTime),

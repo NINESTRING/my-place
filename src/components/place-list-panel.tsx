@@ -1,11 +1,17 @@
 "use client"
 
-import type { Place } from "@/generated/prisma/client"
 import { XIcon } from "lucide-react"
+import { useState } from "react"
 import { PlaceCard } from "@/components/place-card"
 import { PlaceCardMenu } from "@/components/place-card-menu"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  filterByCategories,
+  toCategoryIds,
+  type CategorySummary,
+} from "@/lib/categories"
+import type { PlaceWithCategories } from "@/lib/places"
 import { cn } from "@/lib/utils"
 
 /**
@@ -50,6 +56,7 @@ export function PlaceListPanel({
   ref,
   open,
   places,
+  categories,
   scope,
   onScopeChange,
   selectedId,
@@ -60,15 +67,30 @@ export function PlaceListPanel({
 }: {
   ref?: React.Ref<HTMLElement>
   open: boolean
-  places: Place[] | null
+  places: PlaceWithCategories[] | null
+  /** 필터 칩이 될 내 카테고리 전부. */
+  categories: CategorySummary[]
   scope: PlaceListScope
   onScopeChange: (scope: PlaceListScope) => void
   selectedId: number | null
-  onSelect: (place: Place) => void
-  onEdit: (place: Place) => void
-  onDelete: (place: Place) => void
+  onSelect: (place: PlaceWithCategories) => void
+  onEdit: (place: PlaceWithCategories) => void
+  onDelete: (place: PlaceWithCategories) => void
   onClose: () => void
 }) {
+  // 카테고리 필터. 빈 선택 = 전체. 로컬 state 인 것이 의도적이다 — 이 선택은
+  // 이 패널 밖 어디에도 영향을 주지 않는다(지도 마커는 그대로다).
+  const [filterIds, setFilterIds] = useState<number[]>([])
+
+  // 폼에서 카테고리를 지우면 칩이 사라져 해제할 수 없는 id 가 선택에 남을 수
+  // 있다. 동기화 effect 대신 렌더마다 현재 목록과의 교집합만 쓴다 — 사라진
+  // id 는 칩에도 필터에도 자동으로 무시된다.
+  const activeFilterIds = filterIds.filter((id) =>
+    categories.some((category) => category.id === id)
+  )
+  const shownPlaces =
+    places && filterByCategories(places, activeFilterIds)
+
   return (
     <aside
       ref={ref}
@@ -84,9 +106,9 @@ export function PlaceListPanel({
       <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
         <div className="flex items-baseline gap-2">
           <h2 className="font-heading text-base font-medium">다녀온 장소</h2>
-          {places && (
+          {shownPlaces && (
             <span className="text-muted-foreground text-xs tabular-nums">
-              {places.length}곳
+              {shownPlaces.length}곳
             </span>
           )}
         </div>
@@ -100,7 +122,7 @@ export function PlaceListPanel({
         </Button>
       </header>
 
-      <div className="shrink-0 border-b px-4 py-2">
+      <div className="shrink-0 space-y-2 border-b px-4 py-2">
         <ToggleGroup
           aria-label="목록 범위"
           variant="outline"
@@ -120,18 +142,44 @@ export function PlaceListPanel({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+
+        {categories.length > 0 && (
+          <ToggleGroup
+            multiple
+            aria-label="카테고리 필터"
+            variant="outline"
+            size="sm"
+            value={activeFilterIds.map(String)}
+            onValueChange={(next) => setFilterIds(toCategoryIds(next))}
+            // 범위 토글과 달리 여기서는 빈 선택이 정당하다 — 필터 없음이다.
+            className="max-w-full flex-wrap justify-start"
+          >
+            {categories.map((category) => (
+              <ToggleGroupItem key={category.id} value={String(category.id)}>
+                {category.name}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-        {places === null ? (
+        {shownPlaces === null ? (
           <p className="text-muted-foreground text-sm">
             목록을 불러오는 중입니다.
           </p>
-        ) : places.length === 0 ? (
-          <p className="text-muted-foreground text-sm">{EMPTY_MESSAGE[scope]}</p>
+        ) : shownPlaces.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            {/* 범위에는 장소가 있는데 필터가 다 걸러낸 경우를 갈라 준다 —
+                범위별 빈 문구("등록한 장소가 없습니다")를 그대로 쓰면
+                거짓말이 된다. */}
+            {activeFilterIds.length > 0 && places && places.length > 0
+              ? "고른 카테고리의 장소가 없습니다. 필터를 바꾸거나 해제해 보세요."
+              : EMPTY_MESSAGE[scope]}
+          </p>
         ) : (
           <ul className="space-y-3">
-            {places.map((place) => (
+            {shownPlaces.map((place) => (
               <li key={place.id} className="relative">
                 <button
                   type="button"

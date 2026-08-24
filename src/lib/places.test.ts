@@ -11,7 +11,10 @@ describe("revivePlace", () => {
     longitude: 126.97759,
     title: "한강 야경",
     description: "다리 조명이 켜지는 시간에 갔다",
-    category: "RESTAURANT",
+    categories: [
+      { id: 1, name: "식당" },
+      { id: 2, name: "야경" },
+    ],
     createdAt: "2026-01-02T00:00:00.000Z",
     updatedAt: "2026-01-03T00:00:00.000Z",
   }
@@ -37,7 +40,8 @@ describe("revivePlace", () => {
     expect(result.longitude).toBe(serialized.longitude)
     expect(result.title).toBe(serialized.title)
     expect(result.description).toBe(serialized.description)
-    expect(result.category).toBe(serialized.category)
+    // 카테고리에는 Date 가 없으므로 되살릴 것도 없다 — 그대로 통과한다.
+    expect(result.categories).toEqual(serialized.categories)
   })
 })
 

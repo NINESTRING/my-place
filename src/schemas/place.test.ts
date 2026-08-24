@@ -16,7 +16,7 @@ const validInput = {
   imageCreationTime: new Date("2026-01-01T00:00:00.000Z"),
   latitude: 37.65874,
   longitude: 126.97759,
-  category: "RESTAURANT",
+  categoryIds: [2],
 }
 
 describe("placeInputSchema", () => {
@@ -135,31 +135,59 @@ describe("placeInputSchema", () => {
     }
   })
 
-  it("정의된 카테고리를 통과시킨다", () => {
-    expect(
-      placeInputSchema.safeParse({ ...validInput, category: "SCENERY" }).success
-    ).toBe(true)
-  })
-
-  it("카테고리 미선택(null)을 통과시킨다", () => {
-    const result = placeInputSchema.safeParse({ ...validInput, category: null })
+  it("카테고리 여러 개를 통과시킨다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      categoryIds: [1, 3, 5],
+    })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.category).toBeNull()
+      expect(result.data.categoryIds).toEqual([1, 3, 5])
     }
   })
 
-  it("enum 에 없는 카테고리를 거부한다", () => {
-    // "기타" 는 두지 않는다. nullable 컬럼에 ETC 까지 있으면 "기타" 와
-    // "미선택" 이 같은 말을 두 번 하게 된다.
+  it("카테고리 미지정(빈 배열)을 통과시킨다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      categoryIds: [],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.categoryIds).toEqual([])
+    }
+  })
+
+  it("중복 id 를 하나로 접는다", () => {
+    // 조인 테이블 PK 가 (place_id, category_id) 라서 중복을 그대로 넘기면
+    // 저장이 통째로 실패한다. 사용자의 잘못이 아니므로 경계에서 접는다.
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      categoryIds: [3, 3, 1],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.categoryIds).toEqual([3, 1])
+    }
+  })
+
+  it("10개를 넘는 카테고리를 거부한다", () => {
+    const result = placeInputSchema.safeParse({
+      ...validInput,
+      categoryIds: Array.from({ length: 11 }, (_, i) => i + 1),
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("정수가 아닌 카테고리 id 를 거부한다", () => {
     expect(
-      placeInputSchema.safeParse({ ...validInput, category: "ETC" }).success
+      placeInputSchema.safeParse({ ...validInput, categoryIds: [1.5] }).success
     ).toBe(false)
   })
 
-  it("옛 정수 카테고리 코드를 거부한다", () => {
+  it("옛 enum 문자열 카테고리를 거부한다", () => {
     expect(
-      placeInputSchema.safeParse({ ...validInput, category: 2 }).success
+      placeInputSchema.safeParse({ ...validInput, categoryIds: ["SCENERY"] })
+        .success
     ).toBe(false)
   })
 
@@ -258,7 +286,7 @@ describe("placeUpdateSchema", () => {
     id: 1,
     title: "한강 야경",
     description: "다리 조명이 켜지는 시간에 갔다",
-    category: "SCENERY",
+    categoryIds: [1],
   }
 
   it("올바른 입력을 통과시킨다", () => {
@@ -316,10 +344,10 @@ describe("placeUpdateSchema", () => {
     expect(result.data?.description).toBeUndefined()
   })
 
-  it("카테고리가 null 이어도 통과한다", () => {
+  it("카테고리를 전부 비워도(빈 배열) 통과한다", () => {
     const result = placeUpdateSchema.safeParse({
       ...validUpdate,
-      category: null,
+      categoryIds: [],
     })
     expect(result.success).toBe(true)
   })

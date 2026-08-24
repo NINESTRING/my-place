@@ -18,11 +18,13 @@
 
 import { revalidatePath } from "next/cache"
 import { getCurrentUserId } from "@/lib/auth"
+import { ownsAllCategories } from "@/lib/categories.server"
 import {
   isOwnedImagePath,
   storageExtension,
   userScopedImagePath,
 } from "@/lib/images"
+import { Prisma } from "@/generated/prisma/client"
 import { prisma } from "@/lib/prisma"
 import { PLACES_BUCKET, supabaseAdmin } from "@/lib/supabase/admin"
 import {
@@ -91,9 +93,23 @@ export async function createPlaceAction(
     return { ok: false, error: "이미지 경로가 올바르지 않습니다" }
   }
 
+  const { categoryIds, ...fields } = parsed.data
+
+  // 이미지 경로와 같은 종류의 검사다. 스키마는 "양의 정수 배열"까지만 보므로,
+  // 남의 카테고리 id 를 자기 장소에 붙이는 것은 여기서 막는다.
+  if (!(await ownsAllCategories(categoryIds, userId))) {
+    return { ok: false, error: "카테고리가 올바르지 않습니다" }
+  }
+
   try {
     const place = await prisma.place.create({
-      data: { ...parsed.data, userId },
+      data: {
+        ...fields,
+        userId,
+        categories: {
+          create: categoryIds.map((categoryId) => ({ categoryId })),
+        },
+      },
     })
     revalidatePath("/")
     return { ok: true, id: place.id }
@@ -107,8 +123,13 @@ export async function createPlaceAction(
  *
  * 소유권을 `where` 에 넣는 것이 요점이다. findFirst 로 읽어 userId 를 비교한
  * 뒤 update 하면 두 문장 사이에 창이 생기고, 검사와 갱신이 서로 다른 조건을
- * 보게 될 여지가 남는다. 조건을 SQL 한 문장에 넣으면 갱신된 행 수가 곧
+ * 보게 될 여지가 남는다. 조건을 SQL 한 문장에 넣으면 갱신 성공 여부가 곧
  * 인가 결과다.
+ *
+ * updateMany 가 아니라 update 인 이유: 카테고리 조인의 중첩 쓰기
+ * (deleteMany + create)는 update 에만 있다. update 의 where 는 unique 필드
+ * (id)에 더해 일반 필터(userId)를 함께 받으므로 한 문장 인가는 그대로다 —
+ * 조건에 안 걸리면 P2025 로 떨어진다.
  */
 export async function updatePlaceAction(
   input: unknown
@@ -126,10 +147,15 @@ export async function updatePlaceAction(
     }
   }
 
-  const { id, title, description, category } = parsed.data
+  const { id, title, description, categoryIds } = parsed.data
+
+  // createPlaceAction 과 같은 대조 — 남의 카테고리 id 를 붙이는 것을 막는다.
+  if (!(await ownsAllCategories(categoryIds, userId))) {
+    return { ok: false, error: "카테고리가 올바르지 않습니다" }
+  }
 
   try {
-    const { count } = await prisma.place.updateMany({
+    await prisma.place.update({
       where: { id, userId },
       data: {
         title,
@@ -137,20 +163,29 @@ export async function updatePlaceAction(
         // "이 컬럼은 건드리지 않음" 으로 읽는다. 그대로 넘기면 설명을 지운
         // 수정이 조용히 무시되어 옛 설명이 남는다. null 로 바꿔 비운다.
         description: description ?? null,
-        category,
+        // 조인을 통째로 갈아 끼운다. 어떤 것이 빠지고 더해졌는지 차분을
+        // 계산할 수도 있지만, 개인당 많아야 열 개인 행에서 얻는 것이 없다.
+        categories: {
+          deleteMany: {},
+          create: categoryIds.map((categoryId) => ({ categoryId })),
+        },
         // schema.prisma 의 updatedAt 은 @default(now()) 뿐이고 @updatedAt 이
         // 없다. 여기서 넣지 않으면 생성 시각에 머문다.
         updatedAt: new Date(),
       },
     })
 
-    if (count === 0) {
-      return { ok: false, error: NOT_FOUND }
-    }
-
     revalidatePath("/")
     return { ok: true }
-  } catch {
+  } catch (error) {
+    // P2025 = where 조건에 걸린 행 없음. 없는 장소와 남의 장소가 여기로
+    // 함께 떨어진다.
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return { ok: false, error: NOT_FOUND }
+    }
     return { ok: false, error: "수정에 실패했습니다" }
   }
 }

@@ -1,6 +1,7 @@
 import { AuthErrorToast } from "@/components/auth-error-toast"
 import { PlaceExplorer } from "@/components/place-explorer"
 import { getCurrentUserId } from "@/lib/auth"
+import { getCategories } from "@/lib/categories.server"
 import { boundsAround } from "@/lib/places"
 import { getLatestPlace, getPlacesInBounds } from "@/lib/places.server"
 import type { Bounds } from "@/schemas/place"
@@ -29,7 +30,12 @@ export default async function HomePage() {
   // 비췄다가 옮기는 깜빡임이 없다.
   const latest = userId ? await getLatestPlace(userId) : null
   const initialBounds = latest ? boundsAround(latest) : FALLBACK_BOUNDS
-  const places = userId ? await getPlacesInBounds(initialBounds, userId) : []
+  const [places, categories] = userId
+    ? await Promise.all([
+        getPlacesInBounds(initialBounds, userId),
+        getCategories(userId),
+      ])
+    : [[], []]
 
   return (
     <main>
@@ -38,6 +44,7 @@ export default async function HomePage() {
       <PlaceExplorer
         initialPlaces={places}
         initialBounds={initialBounds}
+        initialCategories={categories}
         initialCenter={
           latest && {
             latitude: latest.latitude,

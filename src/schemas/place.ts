@@ -1,5 +1,4 @@
 import { z } from "zod"
-import { PlaceCategory } from "@/generated/prisma/enums"
 
 const latitude = z.number().min(-90).max(90)
 const longitude = z.number().min(-180).max(180)
@@ -93,10 +92,20 @@ const placeFields = {
     .transform((value) => value || undefined)
     .optional(),
   /**
-   * 선택 값이다. 기본값을 두면 신경 쓰지 않은 장소가 전부 그 값으로
-   * 저장되어(옛 코드의 category: 1 = 카페) 값 자체를 믿을 수 없게 된다.
+   * 선택한 카테고리들의 id. 빈 배열이 미지정이다.
+   *
+   * 서버는 이 id 들이 실제로 세션 사용자의 카테고리인지 별도로 대조한다
+   * (ownsAllCategories) — 형식 검증만으로는 남의 카테고리 id 를 막을 수 없다.
+   *
+   * 중복은 여기서 접는다. 조인 테이블 PK 가 (place_id, category_id) 라서
+   * 같은 id 가 두 번 오면 저장이 통째로 실패하는데, 그것은 사용자의 잘못이
+   * 아니라 보낸 쪽의 버그다. transform 을 거쳐도 입출력이 모두 number[] 라
+   * react-hook-form resolver 로 그대로 쓸 수 있다.
    */
-  category: z.enum(PlaceCategory).nullable(),
+  categoryIds: z
+    .array(z.number().int().positive())
+    .max(10, "카테고리는 10개까지 고를 수 있습니다")
+    .transform((ids) => [...new Set(ids)]),
 }
 
 export const placeInputSchema = z.object({

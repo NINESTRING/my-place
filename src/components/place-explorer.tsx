@@ -14,7 +14,6 @@
 import "maplibre-gl/dist/maplibre-gl.css"
 import { setWorkerUrl } from "maplibre-gl"
 
-import type { Place } from "@/generated/prisma/client"
 import { ListIcon, LogInIcon, LogOutIcon, MapPinPlusIcon } from "lucide-react"
 import Image from "next/image"
 import { useCallback, useEffect, useRef, useState, useTransition } from "react"
@@ -40,8 +39,13 @@ import { SignOutDialog } from "@/components/sign-out-dialog"
 import { Button } from "@/components/ui/button"
 import { useLastData } from "@/hooks/use-last-data"
 import { useLocalState } from "@/hooks/use-local-state"
+import { sortCategories, type CategorySummary } from "@/lib/categories"
 import { publicImageUrl } from "@/lib/images"
-import { revivePlace, type SerializedPlace } from "@/lib/places"
+import {
+  revivePlace,
+  type PlaceWithCategories,
+  type SerializedPlace,
+} from "@/lib/places"
 import type { Bounds, Coordinates, PlaceFormValues } from "@/schemas/place"
 
 if (typeof window !== "undefined") {
@@ -82,7 +86,7 @@ function toQuery(bounds: Bounds): string {
 async function fetchPlaces(
   query: string,
   signal: AbortSignal
-): Promise<Place[] | null> {
+): Promise<PlaceWithCategories[] | null> {
   try {
     const res = await fetch(`/api/places?${query}`, { signal })
     if (!res.ok) return null
@@ -98,12 +102,15 @@ export function PlaceExplorer({
   initialPlaces,
   initialBounds,
   initialCenter,
+  initialCategories,
   isAuthenticated,
 }: {
-  initialPlaces: Place[]
+  initialPlaces: PlaceWithCategories[]
   initialBounds: Bounds
   /** 가장 최근에 다녀온 장소. 첫 화면을 여기로 띄운다. 없으면 null. */
   initialCenter: Coordinates | null
+  /** 내가 만든 카테고리 전부. 등록·수정 폼의 선택지가 된다. */
+  initialCategories: CategorySummary[]
   isAuthenticated: boolean
 }) {
   const mapRef = useRef<MapRef>(null)
@@ -112,7 +119,7 @@ export function PlaceExplorer({
   // revalidatePath 로 새 prop 을 받아 다시 렌더되는데, 그때마다 물으면
   // 사용자가 옮겨 둔 지도가 제자리로 튕겨 돌아간다.
   const askedLocation = useRef(false)
-  const [selected, setSelected] = useState<Place | null>(null)
+  const [selected, setSelected] = useState<PlaceWithCategories | null>(null)
   const [listOpen, setListOpen] = useState(false)
   const [listScope, setListScope] = useState<PlaceListScope>("all")
   const [createOpen, setCreateOpen] = useState(false)
@@ -120,9 +127,12 @@ export function PlaceExplorer({
   const [loginOpen, setLoginOpen] = useState(false)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, startSignOut] = useTransition()
-  const [deleting, setDeleting] = useState<Place | null>(null)
+  const [deleting, setDeleting] = useState<PlaceWithCategories | null>(null)
   const [deletePending, startDelete] = useTransition()
-  const [editing, setEditing] = useState<Place | null>(null)
+  const [editing, setEditing] = useState<PlaceWithCategories | null>(null)
+  // 폼의 카테고리 선택지. 목록이 바뀌는 경로는 이 클라이언트의
+  // createCategoryAction 하나뿐이라 서버 재조회 없이 append 로 유지한다.
+  const [categories, setCategories] = useState(initialCategories)
   // 첫 화면 위치는 저장된 위치 → 최근 장소 → 현재 위치 → 기본 좌표 순으로
   // 정해진다. 앞의 둘은 여기서 동기적으로 끝나고, 현재 위치만 아래 effect 가
   // 비동기로 채운다.
@@ -145,13 +155,15 @@ export function PlaceExplorer({
   }, [bounds, initialBounds, setBounds])
 
   const [debouncedBounds] = useDebounce(bounds, 1000)
-  const [places, setPlaces] = useState<Place[] | null>(initialPlaces)
+  const [places, setPlaces] = useState<PlaceWithCategories[] | null>(
+    initialPlaces
+  )
   const shownPlaces = useLastData(places) ?? []
 
   // 목록 패널의 기본 범위인 "내가 등록한 모든 장소". 마커용 bounds 조회와
   // 달리 지도를 움직여도 다시 부르지 않으므로 따로 들고 있는다. null 은 아직
   // 못 불러왔다는 뜻이고, 패널이 그 상태를 "장소 없음"과 갈라 보여 준다.
-  const [allPlaces, setAllPlaces] = useState<Place[] | null>(null)
+  const [allPlaces, setAllPlaces] = useState<PlaceWithCategories[] | null>(null)
   const everyPlace = useLastData(allPlaces)
 
   // 저장 직후처럼 bounds 는 그대로인데 서버 데이터만 바뀐 경우를 위한 값이다.
@@ -261,9 +273,23 @@ export function PlaceExplorer({
     [listOpen]
   )
 
-  const onSelectFromList = (place: Place) => {
+  const onSelectFromList = (place: PlaceWithCategories) => {
     setSelected(place)
     flyTo(place)
+  }
+
+  /**
+   * 폼 안에서 카테고리를 만들거나 고치거나 지운 뒤의 목록. 다음 목록 계산은
+   * picker 가 순수 헬퍼로 하고, 여기서는 받아서 든다.
+   *
+   * reloadToken 을 함께 올리는 이유: 이름 변경·삭제는 카드에 찍힌 라벨과
+   * 장소-카테고리 연결에도 반영되어야 하는데, 이 화면의 장소 목록은 RSC 가
+   * 아니라 /api/places 로 오므로 재조회가 필요하다. 생성은 장소를 건드리지
+   * 않아 재조회가 남지만, 갈라서 얻는 것에 비해 GET 한 번이 싸다.
+   */
+  const onCategoriesChange = (next: CategorySummary[]) => {
+    setCategories(next)
+    setReloadToken((n) => n + 1)
   }
 
   const onCreated = (place: { latitude: number; longitude: number }) => {
@@ -295,10 +321,19 @@ export function PlaceExplorer({
     // 재조회는 디바운스와 네트워크를 거친다. 그동안 팝업이 옛 제목을 들고
     // 있으면 방금 고친 값이 그대로인 것처럼 보인다. 선택된 장소만 먼저
     // 겹쳐 쓴다. description 은 폼이 undefined 로 접어 오므로 DB 표현인
-    // null 로 되돌린다.
+    // null 로 되돌린다. 카테고리는 id 목록을 선택지에서 축약형으로 되살린다 —
+    // values 를 통째로 스프레드하면 폼 전용 키(categoryIds)가 장소 객체에
+    // 섞여 들어간다.
     setSelected((prev) =>
       prev?.id === id
-        ? { ...prev, ...values, description: values.description ?? null }
+        ? {
+            ...prev,
+            title: values.title,
+            description: values.description ?? null,
+            categories: sortCategories(
+              categories.filter((c) => values.categoryIds.includes(c.id))
+            ),
+          }
         : prev
     )
     setReloadToken((n) => n + 1)
@@ -340,6 +375,9 @@ export function PlaceExplorer({
       // /api/places 를 다시 부르게 해서 빈 목록을 받아 온다.
       setSelected(null)
       setListOpen(false)
+      // 폼 선택지도 이 사용자의 것이다. 비워 두지 않으면 다음 사람이 로그인
+      // 모달을 지나기 전, 남의 카테고리 이름이 등록 폼에 남는다.
+      setCategories([])
       setReloadToken((n) => n + 1)
       setSignOutOpen(false)
     })
@@ -469,6 +507,7 @@ export function PlaceExplorer({
         ref={panelRef}
         open={listOpen}
         places={listScope === "map" ? shownPlaces : everyPlace}
+        categories={categories}
         scope={listScope}
         onScopeChange={setListScope}
         selectedId={selected?.id ?? null}
@@ -482,6 +521,8 @@ export function PlaceExplorer({
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={onCreated}
+        categories={categories}
+        onCategoriesChange={onCategoriesChange}
       />
 
       <LoginDialog
@@ -508,6 +549,8 @@ export function PlaceExplorer({
           if (!next) setEditing(null)
         }}
         onUpdated={onUpdated}
+        categories={categories}
+        onCategoriesChange={onCategoriesChange}
       />
 
       <DeletePlaceDialog
