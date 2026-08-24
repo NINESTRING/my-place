@@ -4,19 +4,29 @@
 
 업로드한 사진의 **EXIF 메타데이터에서 촬영 위치(GPS)와 촬영 시각을 자동으로 추출**해 지도에 핀을 꽂아 주기 때문에, 사용자가 직접 주소를 입력할 필요가 없는 것이 핵심 아이디어입니다.
 
-> 개인 사이드 프로젝트이며 현재 개발 진행 중입니다. 인증 등 일부 기능이 미완성 상태입니다([미완성 / 알려진 이슈](#미완성--알려진-이슈) 참고).
+**배포 주소: <https://my-place-eosin.vercel.app/>** — Google 계정으로 바로 로그인해 써 볼 수 있습니다. 로그인하지 않아도 지도는 볼 수 있고, 등록한 장소는 등록한 사람에게만 보입니다.
+
+> 개인 사이드 프로젝트입니다. 인증까지 붙어 한 바퀴가 돌아가는 상태이며, 남은 항목은 [미완성 / 알려진 이슈](#미완성--알려진-이슈)에 적어 두었습니다.
 
 ## 주요 기능
 
 화면은 `/` 한 페이지뿐입니다. MapLibre 지도가 뷰포트를 가득 채우고, 지도를
-떠나지 않은 채로 등록과 목록을 오버레이로 처리합니다.
+떠나지 않은 채로 로그인·등록·목록을 전부 오버레이로 처리합니다.
 
 | 요소 | 조작 | 설명 |
 | --- | --- | --- |
-| 지도 | — | 화면에 보이는 영역(bounds) 안의 장소만 조회해 마커로 표시, 마커 클릭 시 사진 팝업 |
+| 지도 | — | 화면에 보이는 영역(bounds) 안의 **내** 장소만 조회해 마커로 표시, 마커 클릭 시 사진 팝업 |
 | 등록 | 오른쪽 위 `MapPinPlus` 아이콘 | 모달로 등록 폼을 띄운다. 사진 업로드 → EXIF 파싱 → 폼 안 지도에 촬영 위치 표시 → 제목·설명(선택)·카테고리(선택) 입력 후 저장. 저장하면 모달이 닫히고 지도가 그 좌표로 날아간다 |
-| 목록 | 오른쪽 위 `List` 아이콘 | 왼쪽에서 패널이 밀려 들어온다. **지도를 다 덮지 않으며**(`w-[min(22rem,82vw)]`) 열려 있는 동안에도 지도를 그대로 조작할 수 있다. 헤더 아래 `전체`/`지도 영역` 토글로 범위를 고른다(기본 `전체`). 카드를 누르면 그 장소로 이동한다. 카드 사진 오른쪽 위 `⋮` 로 수정·삭제할 수 있다 |
+| 목록 | 오른쪽 위 `List` 아이콘 | 왼쪽에서 패널이 밀려 들어온다. **지도를 다 덮지 않으며** 열려 있는 동안에도 지도를 그대로 조작할 수 있다. 헤더 아래 `전체`/`지도 영역` 토글로 범위를 고르고(기본 `전체`), 그 아래 카테고리 칩으로 걸러 볼 수 있다(여러 개 = OR, 미선택 = 전체). 카드를 누르면 그 장소로 이동한다. 카드 사진 위 `⋮` 로 수정·삭제할 수 있다 |
+| 로그인 / 로그아웃 | 오른쪽 위 `LogIn` / `LogOut` 아이콘 | Google 계정 하나로 가입과 로그인을 겸한다. 둘 다 라우트 이동 없이 모달로 처리하므로 지도의 위치·확대 수준이 유지된다 |
 
+- **Google 로그인** — Supabase Auth의 OAuth(PKCE) 흐름을 씁니다. 로그인 버튼을
+  직접 누를 수도 있고, 미인증 상태에서 등록·목록 버튼을 누르면 "왜 막혔는지"를
+  담은 설명과 함께 같은 모달이 열립니다. 버튼을 `disabled`로 두지 않은 것은
+  의도적입니다 — 눌리지 않는 버튼은 이유를 설명할 기회가 없습니다.
+- **내 장소만 보인다** — 모든 조회(`getPlacesInBounds`·`getAllPlaces`·`getLatestPlace`)와
+  모든 쓰기가 세션의 사용자 id로 스코핑됩니다. 미인증 사용자에게는 마커 없는
+  지도가 정상 화면이라 `/api/places`도 401이 아니라 `200 + []`를 돌려줍니다.
 - **목록 범위 토글** — 기본값 `전체`는 지도 영역과 무관하게 내가 등록한 모든
   장소(`getAllPlaces`, 개수 상한 없음)를 보여 줍니다. `지도 영역`을 고르면
   마커와 똑같은 `getPlacesInBounds` 결과만 남으므로, 목록과 지도에 찍힌 것이
@@ -24,9 +34,24 @@
 - **EXIF 기반 자동 위치 인식** — `exifr`로 사진에서 위경도·촬영일시를 읽고, 정보가 없는 사진은 등록을 거부합니다.
 - **뷰포트 기반 조회** — 지도를 움직이면 현재 bounds를 디바운스(`use-debounce`) 후 `GET /api/places`로 재조회합니다. 지도 위치/영역은 localStorage에 저장되어 새로고침해도 유지됩니다.
 - **첫 화면 위치** — `저장된 위치 → 가장 최근에 다녀온 장소 → 브라우저 현재 위치 → 기본 좌표(수도권)` 순으로 정해집니다. 최근 장소는 서버가 `getLatestPlace`로 미리 찾아 좌표와 조회 범위(`boundsAround`)를 함께 내려 주므로 첫 페인트부터 그 자리입니다. 현재 위치는 **저장된 위치도 장소도 없을 때만** 묻고, 권한 응답을 기다리느라 지도가 늦게 뜨지 않도록 답이 온 뒤 `jumpTo`로 옮깁니다(거부하면 기본 좌표 유지). 위치 API는 HTTPS 또는 localhost에서만 동작합니다.
-- **이미지 업로드** — 서버 액션(`createUploadUrlAction`)이 Supabase Storage 서명 업로드 URL을 발급하고, 브라우저가 그 URL로 직접 올립니다. 브라우저에 Supabase 키가 나가지 않습니다.
-- **카테고리 선택** — `ToggleGroup` 기반 5지선다(카페·식당·숙소·명소·풍경)이며 선택 사항입니다. 같은 항목을 다시 누르면 해제됩니다. 값은 Prisma enum `PlaceCategory` 이고 미선택은 `null` 입니다.
+- **이미지 업로드** — 서버 액션(`createUploadUrlAction`)이 Supabase Storage 서명 업로드 URL을 발급하고, 브라우저가 그 URL로 직접 올립니다. 브라우저에 Supabase 시크릿 키가 나가지 않습니다. 저장 경로는 서버가 `<userId>/<uuid>.<ext>`로 정합니다.
+- **카테고리** — 사용자가 직접 만듭니다. 등록·수정 폼의 카테고리 칸에서
+  인라인 입력으로 새 이름(20자까지)을 추가하면 곧바로 선택 상태가 되고, 한
+  장소에 여러 개(10개까지)를 지정할 수 있습니다. 선택 사항이라 하나도 고르지
+  않아도 됩니다. 같은 이름을 다시 추가하면 서버가 기존 카테고리를 돌려줍니다
+  (멱등). 같은 칸의 `관리` 토글에서 이름을 고치거나(사용자 안 중복 이름은
+  거부) 지울 수 있고, 지우면 그 카테고리를 쓰던 장소들에서도 사라집니다
+  (장소는 남습니다 — 조인만 FK Cascade 로 지워집니다). 카테고리는 만든
+  사용자에게만 보이며, 카드에는 이름들이 `·` 로 이어져 찍힙니다. 목록
+  패널에서는 카테고리 칩으로 걸러 볼 수 있습니다 — 여러 개를 고르면 그중
+  하나라도 가진 장소가 남고(OR), 하나도 고르지 않으면 전체입니다. 필터는
+  목록에만 적용되고 지도 마커는 그대로입니다. 예전의 고정
+  5지선다(카페·식당·숙소·명소·풍경)는
+  `supabase/migrations/20260824000000_user_categories.sql` 이 같은 이름의
+  사용자 카테고리로 이행합니다.
 - **수정·삭제** — 목록 카드의 `⋮` 메뉴에서 제목·설명·카테고리를 고치거나 장소를 지웁니다. 사진과 촬영 위치는 EXIF에서 온 값이라 수정 대상이 아니며, 삭제하면 Storage의 사진도 함께 지워집니다.
+- **폰 화면 대응** — 좁은 화면(`sm` 미만)에서는 목록 카드가 96px 썸네일을 앞세운 가로 배치로 눕고(한 화면에 여섯 곳 남짓), 마커 팝업 내용 폭이 176px로, 목록 패널 폭이 `70vw`로 줄어듭니다. 데스크톱 배치는 그대로입니다.
+- **토스트 안내** — 삭제 성공, 로그인 시작 실패, OAuth 콜백 실패 등은 sonner 토스트로 알립니다. 콜백 실패는 `/?auth_error=1`로 돌아오며, 토스트를 띄운 뒤 `replaceState`로 주소창을 정리합니다.
 - **업로드 영역 Lottie 애니메이션** — 페이지 전환 애니메이션은 없습니다(아래 기술 스택의 안내 참고).
 
 ## 기술 스택
@@ -35,6 +60,9 @@
 - **스타일**: Tailwind CSS 4 + shadcn/ui (`shadcn`은 devDependency이며,
   `app/globals.css`가 `shadcn/tailwind.css`를 import해 생성된 컴포넌트가
   쓰는 커스텀 variant를 공급받는다)
+- **인증**: Supabase Auth (Google OAuth, PKCE). 세션은 httpOnly 쿠키이고
+  `@supabase/ssr`이 서버/브라우저 양쪽 클라이언트를 만든다. 토큰 갱신은
+  `proxy.ts`(Next 16에서 `middleware.ts`의 새 이름)가 요청 앞단에서 담당한다
 - **데이터**: 서버 컴포넌트가 Prisma를 직접 호출. 쓰기는 서버 액션,
   지도 bounds 재조회는 Route Handler(GET)
 - **검증**: Zod (클라이언트 폼과 서버 액션이 스키마 공유)
@@ -45,8 +73,9 @@
   (워커 청크를 `public/maplibre`로 복사해 `setWorkerUrl`로 지정합니다 —
   아래 알려진 이슈 참고)
 - **이미지**: Supabase Storage (public 버킷) + next/image 내장 최적화
-- **인증**: 미구현. 벤더는 Supabase Auth로 확정했습니다. `src/lib/auth.ts`의 `getCurrentUserId()`가 고정값 `"1"`을 반환하는 스텁입니다.
-- **테스트**: Vitest
+- **알림**: sonner (`next-themes`는 shadcn이 생성한 sonner 래퍼가 테마를 읽는 용도로만 들어 있습니다)
+- **테스트**: Vitest (단위 테스트 94개 / 5파일)
+- **호스팅**: Vercel
 - **기타**: react-hook-form, exifr, lottie-web, use-debounce
 
 > **페이지 전환 애니메이션은 없습니다.** 초기 계획은 View Transitions 기반
@@ -65,21 +94,26 @@
 
 ```text
 브라우저 — / 한 페이지
- ├─ 서버 컴포넌트   초기 bounds 장소 ──► Prisma ──► PostgreSQL
- ├─ PlaceExplorer   지도 + 조작 버튼 + 목록 패널 + 등록 모달 (클라이언트)
+ ├─ proxy.ts        모든 요청 앞단에서 Supabase 세션 토큰만 갱신
+ ├─ 서버 컴포넌트   getCurrentUserId() ─► 내 최근 장소 + 초기 bounds ─► Prisma ─► PostgreSQL
+ ├─ PlaceExplorer   지도 + 조작 버튼 + 목록 패널 + 등록/수정/삭제/로그인/로그아웃 모달 (클라이언트)
  │   ├─ 팬/줌 ──► GET /api/places?swLat&swLng&neLat&neLng  (마커)
  │   ├─ 목록 패널   GET /api/places?scope=all (전체) 또는 위 조회 결과
  │   │              (지도 영역) 를 카드로 (클릭 ──► flyTo)
- │   └─ 등록 모달   폼 ──► 서버 액션 createPlaceAction ──► Prisma
- │                       └─ createUploadUrlAction ──► Supabase Storage 직접 업로드
+ │   ├─ 등록 모달   폼 ──► 서버 액션 createPlaceAction ──► Prisma
+ │   │                   └─ createUploadUrlAction ──► Supabase Storage 직접 업로드
+ │   ├─ 수정·삭제   updatePlaceAction / deletePlaceAction (+ Storage 객체 삭제)
+ │   └─ 로그인      supabase.auth.signInWithOAuth ──► Google
+ ├─ /auth/callback  authorization code ──► 세션 쿠키 교환 ──► 원래 화면으로
  └─ 이미지          next/image + Supabase Storage
 ```
 
 한 페이지로 합치면서 저장 후 이동할 페이지가 없어졌다. `PlaceForm`은
 `router.push` 대신 `onCreated(좌표)` 콜백을 부르고, `PlaceExplorer`가 모달을
 닫고 그 좌표로 `flyTo` 한다. 이때 장소 목록은 RSC가 아니라 `/api/places`로
-가져오므로 `router.refresh()`로는 갱신되지 않는다 — bounds가 그대로일 때도
-재조회가 걸리도록 `reloadToken`을 올린다.
+가져오므로 `router.refresh()`나 `revalidatePath()`로는 갱신되지 않는다 —
+bounds가 그대로일 때도 재조회가 걸리도록 `reloadToken`을 올린다. 로그아웃
+직후 남의 목록이 화면에 남지 않게 하는 것도 같은 장치다.
 
 옛 `/map`·`/create` 경로는 `next.config.ts`의 `redirects()`가 `/`로 308
 리다이렉트한다.
@@ -92,33 +126,69 @@ Route Handler(GET)를 쓰는데, 서버 액션은 POST 전용이고 순차 실�
 `src/schemas/place.ts`의 Zod 스키마 하나를 클라이언트 폼 검증과 서버 액션
 검증이 공유한다.
 
+### 인증과 인가
+
+- **세션 판정은 `src/lib/auth.ts`의 `getCurrentUserId()` 한 곳뿐이다.**
+  `supabase.auth.getClaims()`로 JWT 서명을 검증하고(비대칭 키면 WebCrypto
+  로컬 검증) `sub`를 돌려준다. 쿠키 값을 그대로 믿는 `getSession()`은 쓰지
+  않는다. React `cache()`로 감싸 한 렌더 패스에서 검증이 한 번만 일어난다.
+  반환형이 `string | null`이라 호출부는 미인증 분기를 처리하지 않으면
+  컴파일되지 않는다.
+- **`proxy.ts`는 인가를 하지 않는다.** 하는 일은 토큰 갱신 하나뿐이다.
+  미인증 사용자도 지도를 볼 수 있어야 하고 로그인은 별도 라우트가 아니라
+  모달이기 때문에, 리다이렉트 기반 방어선을 두지 않고 데이터 소스에 가까운
+  곳(`lib/auth.ts`, `actions/place.ts`)에서 판단한다.
+- **쓰기 경로의 인가는 두 겹이다.** ① 세션이 없으면 아무것도 하지 않는다.
+  ② 업로드 경로가 `<userId>/<uuid>.<ext>`라서 제출된 `image` 값의 앞
+  세그먼트를 세션 사용자와 대조하면 소유권이 증명된다. 서명 URL 발급과 행
+  생성이 서로 다른 요청이라 ②가 없으면 A가 받은 서명 URL과 무관한 남의
+  경로를 자기 행에 붙일 수 있다.
+- **수정·삭제는 소유자 조건을 `where`에 넣는다.** 읽고 비교한 뒤 갱신하면 두
+  문장 사이에 창이 생기므로, 조건을 SQL 한 문장에 넣어 갱신된 행 수를 곧
+  인가 결과로 쓴다. 없는 장소와 남의 장소는 같은 문구로 묶어 존재 여부가
+  새지 않게 한다.
+- **콜백의 `next` 파라미터는 내부 절대 경로만 허용한다**(`//evil.com` 같은
+  스킴 상대 URL 차단).
+
 ### 데이터 모델
 
-`places` 테이블 (Prisma `Place`) — `userId`(인덱스), `image`, `imageCreationTime`, `latitude`, `longitude`, `title`, `description`(nullable), `category`(`PlaceCategory` enum, nullable), `createdAt`, `updatedAt`.
+- `places` (Prisma `Place`) — `userId`(Supabase auth 사용자 UUID, 인덱스), `image`, `imageCreationTime`, `latitude`, `longitude`, `title`, `description`(nullable), `createdAt`, `updatedAt`.
+- `categories` (Prisma `Category`) — `userId`, `name`, `createdAt`. 이름은 같은 사용자 안에서 유일(`@@unique([userId, name])`).
+- `place_categories` (Prisma `PlaceCategory`) — 장소-카테고리 다대다 조인. 양쪽 모두 `onDelete: Cascade` 라 장소를 지우면 조인만 사라지고 카테고리는 남는다. 암시적 m-n 대신 명시적 모델을 쓰는 이유는 테이블·컬럼 이름을 우리가 정해야 이행 SQL 과 RLS 구문이 Prisma 관례(`_CategoryToPlace`, `A`/`B`)에 묶이지 않기 때문.
+
+제출된 카테고리 id 가 세션 사용자의 것인지는 서버 액션이 `ownsAllCategories` 로 대조한다 — 형식 검증(Zod)만으로는 남의 카테고리 id 를 막을 수 없다.
 
 ## 디렉터리 구조
 
 ```text
 app/
-  layout.tsx           루트 레이아웃 (전역 헤더 없음 — 지도가 화면을 채운다)
+  layout.tsx           루트 레이아웃 (전역 헤더 없음 — 지도가 화면을 채운다, Toaster 포함)
   globals.css          Tailwind 4 + shadcn 테마
   page.tsx             유일한 화면 (force-dynamic)
-  api/places/route.ts  bounds 기반 장소 조회
+  api/places/route.ts  bounds 기반 / scope=all 장소 조회 (미인증이면 빈 배열)
+  auth/callback/route.ts  OAuth code → 세션 쿠키 교환
   error.tsx  loading.tsx  not-found.tsx
+proxy.ts               Next 16 미들웨어 — Supabase 세션 토큰 갱신 전용
 src/
-  actions/     서버 액션 (createPlaceAction, createUploadUrlAction)
+  actions/     서버 액션 (createPlaceAction, updatePlaceAction, deletePlaceAction,
+               createUploadUrlAction, createCategoryAction,
+               updateCategoryAction, deleteCategoryAction, signOutAction)
   schemas/     Zod 스키마 (폼·서버 액션 공용)
   lib/         prisma, places(순수 헬퍼), places.server(DB 조회), images,
-               supabase, auth, categories, utils(cn)
-  components/  PlaceExplorer(화면 전체), PlaceListPanel, CreatePlaceDialog,
-               PlaceCard, PlaceForm, CategoryPicker
+               supabase/{server,browser,admin}, auth, categories, utils(cn)
+  components/  PlaceExplorer(화면 전체), PlaceListPanel, PlaceCard, PlaceCardMenu,
+               CreatePlaceDialog, EditPlaceDialog, DeletePlaceDialog,
+               LoginDialog, SignOutDialog, AuthErrorToast,
+               PlaceForm, PlaceFields, CategoryPicker, CategoryManager
   components/ui/  shadcn 생성물 (Field 기반 폼 프리미티브 포함, form.tsx 없음)
   hooks/       useLocalState, useLastData
   assets/      Lottie 애니메이션 JSON
   generated/   Prisma Client 생성물 (gitignore)
 prisma/schema.prisma
 prisma.config.ts       Prisma 7 CLI 설정 (스키마 경로·DATABASE_URL)
-scripts/               maplibre 워커 청크 복사, dev-doctor
+supabase/migrations/   Storage 버킷·RLS, 스텁 사용자 데이터 정리,
+                       enum 카테고리 → 사용자 정의 카테고리 이행
+scripts/               maplibre 워커 청크 복사, dev-doctor, purge-stub-storage(1회성)
 public/maplibre/       maplibre 워커 청크 복사본 (gitignore)
 ```
 
@@ -128,21 +198,40 @@ public/maplibre/       maplibre 워커 청크 복사본 (gitignore)
 
 - Node.js 20.19+ (Prisma 7 요구 사항)
 - PostgreSQL 데이터베이스
-- Supabase 프로젝트 (Storage 버킷 `places` 포함)
+- Supabase 프로젝트 (Storage 버킷 `places`, Auth의 Google 제공자 포함)
 
 ### 환경 변수
 
-프로젝트 루트에 `.env` 파일을 만듭니다.
+프로젝트 루트에 `.env` 파일을 만듭니다. 네 값 모두 필수입니다
+(`src/types/env.d.ts`가 타입으로도 강제합니다).
 
 ```bash
 DATABASE_URL="postgresql://user:password@localhost:5432/myplace"
 
 NEXT_PUBLIC_SUPABASE_URL=
-SUPABASE_SECRET_KEY=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=   # 브라우저·SSR 인증용 (공개되어도 되는 키)
+SUPABASE_SECRET_KEY=                    # 서버 전용 (Storage 관리, RLS 우회)
 ```
 
-Supabase 프로젝트에는 `supabase/migrations/`의 SQL도 적용해야 합니다. Storage
-버킷 `places` 생성과 `public.places`의 RLS 활성화를 담고 있습니다.
+### Supabase 설정
+
+1. `supabase/migrations/`의 SQL을 순서대로 적용합니다. Storage 버킷 `places`
+   생성(공개 읽기, 10MB 제한, JPEG/PNG/WebP만 허용)과 `public.places`의 RLS
+   활성화, 인증 이전 스텁 사용자(`user_id = '1'`) 행 정리, 그리고 enum
+   카테고리를 사용자 정의 카테고리 테이블로 옮기는 이행을 담고 있습니다.
+   **카테고리 이행 SQL 은 `prisma db push` 보다 먼저 적용해야 합니다** —
+   push 를 먼저 돌리면 옛 `category` 컬럼이 백필 전에 지워져 어떤 카테고리를
+   골랐었는지가 사라집니다.
+2. Authentication → Providers에서 **Google**을 켜고 client id/secret을 넣습니다.
+3. Authentication → URL Configuration의 **Redirect URLs**에 로그인이 돌아올
+   주소를 등록합니다 — 로컬은 `http://localhost:3000/auth/callback`,
+   배포본은 `https://<도메인>/auth/callback`. 코드가
+   `${window.location.origin}/auth/callback`으로 보내므로 프리뷰 도메인을 쓰면
+   그것도 함께 등록해야 합니다.
+
+RLS는 켜 두었지만 정책은 만들지 않습니다. Prisma는 테이블 소유자 롤로
+접속해 RLS를 우회하고 `anon`/`authenticated` 롤은 Data API로 이 테이블에
+접근할 수 없습니다 — 장소 데이터는 오직 서버(Prisma)를 통해서만 오갑니다.
 
 ### 설치 및 실행
 
@@ -157,7 +246,9 @@ npm run dev            # http://localhost:3000
 제목·카테고리 개편(별점 컬럼 삭제, `title` NOT NULL 추가, `category`를
 정수에서 enum으로 변경) 당시 `places`는 빈 테이블이어서 데이터 마이그레이션이
 없습니다. 이미 행이 있는 DB에 적용하려면 이 세 컬럼은 손으로 마이그레이션을
-작성해야 합니다.
+작성해야 합니다. 반면 enum → 사용자 정의 카테고리 이행은 데이터가 있는
+상태에서 이루어졌으므로 `20260824000000_user_categories.sql` 이 백필까지
+담당합니다 — 위 Supabase 설정의 순서 주의를 지키세요.
 
 `src/generated/prisma`(Prisma Client)와 `public/maplibre`(maplibre 워커 청크)는
 둘 다 생성물이라 git에 없습니다. `npm install`의 postinstall이 만들고,
@@ -171,28 +262,51 @@ npm run build       # 프로덕션 빌드
 npm start           # 프로덕션 서버 실행
 npm test            # Vitest 단위 테스트
 npm run test:watch  # Vitest 단위 테스트(watch 모드)
+
+bash scripts/dev-doctor.sh   # 개발 서버가 조용히 죽을 때 원인·메모리 추적 래퍼
 ```
+
+`scripts/dev-doctor.sh`는 `next dev`의 감독 프로세스가 자식 `next-server`의
+시그널 종료를 코드 0으로 삼켜 버려 "서버가 저절로 다운된" 것처럼 보이는
+상황을 위한 것입니다. 종료 사인, 종료 직전 RSS 추이, 커널의 jetsam 강제종료
+기록을 `.next/dev-doctor/`에 남깁니다.
+
+## 배포
+
+Vercel에 올라가 있습니다 — <https://my-place-eosin.vercel.app/>.
+
+- 위 네 환경 변수를 Vercel 프로젝트에 그대로 등록합니다.
+  `NEXT_PUBLIC_SUPABASE_URL`은 빌드 타임에도 필요합니다
+  (`next.config.ts`가 이미지 `remotePatterns`를 만들 때 읽으며, 없으면 빌드가
+  실패합니다).
+- Supabase의 Redirect URLs에 배포 도메인의 `/auth/callback`을 추가해야
+  로그인이 돌아옵니다.
+- 홈은 `force-dynamic`이라 빌드 시점에 DB에 붙지 않습니다.
+- `proxy.ts`가 인증 쿠키를 싣는 응답에 라이브러리가 준 캐시 헤더를 그대로
+  붙입니다 — CDN이 세션 쿠키가 실린 응답을 캐시하면 남의 세션이 서빙될 수
+  있기 때문입니다.
 
 ## 미완성 / 알려진 이슈
 
-- **인증이 구현되어 있지 않습니다.** 모든 쓰기 경로는
-  `src/lib/auth.ts`의 `getCurrentUserId()`를 통과하며, 이 함수는 고정값
-  `"1"`을 반환합니다. 인증 벤더는 Supabase Auth로 확정했습니다.
-  **다만 이 함수 하나만 바꾸면 끝나는 것은 아닙니다** — 발급된 서명 업로드
-  URL의 경로와 `createPlaceAction`에 제출된 경로가 바인딩되지 않아, 인증이
-  붙는 순간 다른 사용자의 이미지를 자기 행에 붙일 수 있게 됩니다. 자세한
-  내용은 `src/actions/place.ts` 상단 주석에 있습니다.
 - 장소 카드가 shadcn Card 기반으로 재구성되면서, 이전의 티켓 절취선 디자인은
   더 이상 재현하지 않습니다.
 - 목록 패널은 지도를 가리지 않는 것이 목적이라 백드롭도 포커스 트랩도 없는
   일반 `<aside>`입니다. 닫힘 상태에서는 화면 밖으로 밀려나 있을 뿐 DOM에
   남으므로 `inert`로 탭 순서에서 제외합니다. 스와이프로 닫는 제스처는 없습니다.
-- 테스트는 Zod 스키마와 순수 함수에 대한 Vitest 단위 테스트만 있습니다.
-  컴포넌트 테스트와 E2E 테스트는 없습니다.
-- `place(id)` 단건 조회, 반경 10km `nearby` 조회, 장소 삭제 기능은 이전
-  GraphQL 스키마에 정의되어 있었으나 호출하는 화면이 없어 이전 대상에서
-  제외했습니다.
+- 테스트는 Zod 스키마와 순수 함수에 대한 Vitest 단위 테스트(94개)뿐입니다.
+  컴포넌트 테스트와 E2E 테스트는 없고, 인증·인가 경로도 수동 확인에
+  의존합니다.
+- 로그인 제공자는 Google 하나뿐입니다. 이메일/비밀번호나 다른 소셜 로그인은
+  없습니다.
+- 계정 삭제, 내 장소 내보내기 같은 계정 수준 기능은 없습니다.
+- `place(id)` 단건 조회, 반경 10km `nearby` 조회는 이전 GraphQL 스키마에
+  정의되어 있었으나 호출하는 화면이 없어 이전 대상에서 제외했습니다.
 - **HEIC 미지원** — 파일 선택이 JPEG·PNG·WebP로 제한됩니다. Next.js 내장 이미지 최적화가 HEIC 출력을 지원하지 않기 때문입니다.
+- **사진은 공개 버킷에 있습니다.** 장소 *행*은 등록자에게만 보이지만, 이미지
+  객체 URL을 아는 사람은 사진 자체를 열 수 있습니다. 경로에 UUID가 들어가
+  추측은 어렵지만 비공개는 아닙니다. 완전히 막으려면 버킷을 private으로
+  돌리고 조회마다 서명 URL을 발급해야 하는데, next/image 최적화와 캐싱을
+  다시 설계해야 해서 지금은 하지 않았습니다.
 - **OpenFreeMap 타일은 SLA가 없습니다.** 기부로 운영되는 무료 서비스입니다. 안정성이 필요해지면 `mapStyle` URL만 다른 제공자로 바꾸면 됩니다.
 - **`maplibre-gl` 6의 워커는 URL을 직접 지정해 줘야 합니다.** 6.x는 워커를
   별도 청크로 내보내고 그 URL을 자기 모듈의 `import.meta.url`에서 유도하는데,
