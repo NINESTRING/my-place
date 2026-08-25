@@ -43,10 +43,19 @@ export function useLocalState<S>(
     setHydrated(true)
   }, [key, persist])
 
+  // hydrated 이전에는 쓰지 않는다. 이 값은 아직 "저장할 만한 값"이 아니라
+  // 읽기 effect 가 아직 덮어쓰지 않은 초기값일 뿐이기 때문이다.
+  //
+  // 이 검사가 없으면 개발 모드(Strict Mode 는 app router 기본값)에서 저장값이
+  // 통째로 날아간다. effect 가 두 번 도는데, 1차 쓰기가 초기값으로 저장값을
+  // 덮어쓰고 2차 읽기가 그 덮어쓴 값을 되읽어 오기 때문이다. 그러면 1차
+  // 읽기의 setValue 가 2차 읽기의 setValue 에 덮여 초기값이 최종값이 된다.
+  // 운영 빌드는 effect 가 한 번뿐이라 다음 렌더의 쓰기로 자가 복구되지만,
+  // 애초에 읽기 전에 쓰는 것이 잘못이다.
   useEffect(() => {
-    if (!persist) return
+    if (!persist || !hydrated) return
     window.localStorage.setItem(key, JSON.stringify(value))
-  }, [key, persist, value])
+  }, [key, persist, hydrated, value])
 
   return [value, setValue, hydrated, restored]
 }
