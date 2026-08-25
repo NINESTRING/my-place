@@ -14,7 +14,13 @@
 import "maplibre-gl/dist/maplibre-gl.css"
 import { setWorkerUrl } from "maplibre-gl"
 
-import { ListIcon, LogInIcon, LogOutIcon, MapPinPlusIcon } from "lucide-react"
+import {
+  CircleQuestionMarkIcon,
+  ListIcon,
+  LogInIcon,
+  LogOutIcon,
+  MapPinPlusIcon,
+} from "lucide-react"
 import Image from "next/image"
 import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import Map, {
@@ -30,6 +36,7 @@ import { deletePlaceAction } from "@/actions/place"
 import { CreatePlaceDialog } from "@/components/create-place-dialog"
 import { DeletePlaceDialog } from "@/components/delete-place-dialog"
 import { EditPlaceDialog } from "@/components/edit-place-dialog"
+import { HelpDialog } from "@/components/help-dialog"
 import { LoginDialog, type LoginReason } from "@/components/login-dialog"
 import {
   PlaceListPanel,
@@ -134,6 +141,7 @@ export function PlaceExplorer({
   const [loginReason, setLoginReason] = useState<LoginReason>(null)
   const [loginOpen, setLoginOpen] = useState(false)
   const [signOutOpen, setSignOutOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [signingOut, startSignOut] = useTransition()
   const [deleting, setDeleting] = useState<PlaceWithCategories | null>(null)
   const [deletePending, startDelete] = useTransition()
@@ -155,6 +163,13 @@ export function PlaceExplorer({
   const [bounds, setBounds] = useLocalState<Bounds>(
     "bounds",
     initialBounds,
+    !isShare
+  )
+  // 사용법 안내를 이미 본 사용자인지. 값을 쓰는 곳은 아래 자동 노출
+  // effect 하나뿐이다.
+  const [helpSeen, setHelpSeen, helpHydrated] = useLocalState(
+    "help-seen",
+    false,
     !isShare
   )
 
@@ -272,6 +287,23 @@ export function PlaceExplorer({
       cancelled = true
     }
   }, [viewportHydrated, viewportRestored, initialCenter, isShare])
+
+  // 처음 온 사람에게 사용법 안내를 한 번 자동으로 띄운다. 이 화면은 지도와
+  // 아이콘 버튼뿐이라 설명이 없으면 무엇부터 눌러야 할지 알 수 없다.
+  useEffect(() => {
+    if (isShare) return
+
+    // hydrated 이전에는 helpSeen 이 아직 기본값 false 라서, 이 검사를 빼면
+    // 재방문자에게도 모달이 깜빡 보였다 사라진다. 위 권한 프롬프트와 같다.
+    if (!helpHydrated || helpSeen) return
+
+    // 닫을 때가 아니라 뜨는 순간에 표시한다. 자동 노출은 "처음 들어왔을 때
+    // 딱 한 번"이므로, 모달을 열어 둔 채 새로고침해도 다시 뜨면 안 된다.
+    // 이 표시가 곧 재노출을 막는 자물쇠라서 별도의 ref 가 필요 없다 —
+    // 다음 렌더부터 helpSeen 이 true 라 위 검사에 걸린다.
+    setHelpSeen(true)
+    setHelpOpen(true)
+  }, [helpHydrated, helpSeen, isShare, setHelpSeen])
 
   const onMoveEnd = (e: ViewStateChangeEvent) => {
     const b = e.target.getBounds()
@@ -561,6 +593,17 @@ export function PlaceExplorer({
                 <LogInIcon className="size-5" />
               </Button>
             )}
+
+            {/* 스택은 자주 쓰는 것부터 놓는다. 도움말은 한 번 보고 나면 거의
+                누르지 않으므로 맨 아래다. */}
+            <Button
+              variant="outline"
+              onClick={() => setHelpOpen(true)}
+              aria-label="사용법 안내"
+              className="size-11 rounded-full shadow-lg"
+            >
+              <CircleQuestionMarkIcon className="size-5" />
+            </Button>
           </>
         )}
       </div>
@@ -600,6 +643,8 @@ export function PlaceExplorer({
             categories={categories}
             onCategoriesChange={onCategoriesChange}
           />
+
+          <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
 
           <LoginDialog
             open={loginOpen}
